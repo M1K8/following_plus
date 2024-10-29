@@ -1,0 +1,14 @@
+
+# memgraph-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: memgraph-service
+spec:
+  selector:
+    app: memgraph
+  ports:
+    - protocol: TCP
+      port: 7687  # The port Kubernetes will expose
+      targetPort: 7687  # The port Memgraph listens on
+  type: ClusterIP

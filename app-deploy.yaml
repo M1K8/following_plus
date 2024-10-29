@@ -1,0 +1,20 @@
+# rust-app-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bsky
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bsky
+  template:
+    metadata:
+      labels:
+        app: bsky
+    spec:
+      containers:
+        - name: bsky
+          image: bsky  # This should match the tag of your locally built image
+          ports:
+            - containerPort: 8080  # Adjust if your Rust app listens on a different port
