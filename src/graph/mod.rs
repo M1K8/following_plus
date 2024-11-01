@@ -10,39 +10,38 @@ impl GraphModel {
         let inner = Graph::new(uri, user, pass).await?;
         Ok(Self { inner })
     }
-    
-    pub async fn add_post(did: String, cid: String) -> Result<(), neo4rs::Error> {
 
+    pub async fn add_post(&self, did: String, cid: String) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 
-    // pub async fn add_profile(did: String) -> Result<(), neo4rs::Error> {
-    //     Ok(())
-    // }
-
-    pub async fn add_follow(didOut: String, didIn: String) -> Result<(), neo4rs::Error> {
+    pub async fn add_follow(&self, didOut: String, didIn: String) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 
-    pub async fn add_like(didOut: String, didIn: String, cid: String) -> Result<(), neo4rs::Error> {
+    pub async fn add_like(
+        &self,
+        didOut: String,
+        didIn: String,
+        cid: String,
+    ) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 
-    pub async fn rm_post(did: String, cid: String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_post(&self, did: String, cid: String) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 
-    // pub async fn rm_profile(did: String) -> Result<(), neo4rs::Error> {
-    //     Ok(())
-    // }
-
-    pub async fn rm_follow(didOut: String, didIn: String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_follow(&self, didOut: String, didIn: String) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 
-    pub async fn rm_like(didOut: String, didIn: String, cid: String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_like(
+        &self,
+        didOut: String,
+        didIn: String,
+        cid: String,
+    ) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 }
-
-

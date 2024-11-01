@@ -27,7 +27,16 @@ MERGE (u)-[:POSTED]->(p)
 RETURN u,p
 "#;
 
+const ADD_REPOST: &str = r#"
+UNWIND $reposts as repost
+MERGE((u:User {did: repost.out})
+MERGE (v: User {did: repost.in})
+MERGE (p: Post {cid: repost.cid})
+MATCH (v)-[:POSTED]->(p)
+MERGE (u)-[r:REPOSTED]->(p)
 
+RETURN u,r,v
+"#;
 
 const RM_FOLLOW: &str = r#"
 UNWIND $follows as follow
@@ -51,6 +60,17 @@ DELETE r
 RETURN u
 "#;
 
+const RM_REPOST: &str = r#"
+UNWIND $reposts as repost
+MERGE((u:User {did: repost.out})
+MERGE (v: User {did: repost.in})
+MERGE (p: Post {cid: repost.cid})
+MATCH (v)-[:POSTED]->(p)
+MATCH (u)-[r:REPOSTED]->(p)
+DELETE r
+
+RETURN u
+"#;
 
 const RM_POST: &str = r#"
 UNWIND $posts as post
