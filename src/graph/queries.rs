@@ -1,81 +1,66 @@
-const ADD_FOLLOW: &str = r#"
+pub(crate) const ADD_FOLLOW: &str = r#"
 UNWIND $follows as follow
-MERGE((u:User {did: follow.out})
+MERGE (u: User {did: follow.out})
 MERGE (v: User {did: follow.in})
-MERGE (u)-[r:FOLLOWS]->(v)
-
-RETURN u,r,v
+CREATE (u)-[r:FOLLOWS]->(v)
 "#;
 
-const ADD_LIKE: &str = r#"
+pub(crate) const ADD_LIKE: &str = r#"
 UNWIND $likes as like
-MERGE((u:User {did: like.out})
-MERGE (v: User {did: like.in})
 MERGE (p: Post {cid: like.cid})
-MATCH (v)-[:POSTED]->(p)
-MERGE (u)-[r:LIKES]->(p)
-
-RETURN u,r,v
+MERGE (v: User {did: like.in})
+CREATE (u)-[r:LIKES]->(p)
 "#;
 
-const ADD_POST: &str = r#"
+pub(crate) const ADD_POST: &str = r#"
 UNWIND $posts as post
-MERGE((u:User {did: post.out})
-MERGE (p: Post {cid: post.cid, epoch: timestamp()})
-MERGE (u)-[:POSTED]->(p)
-
-RETURN u,p
+MERGE (u:User {did: post.did})
+CREATE (p: Post {cid: post.cid, epoch: timestamp() } )
+CREATE (u)-[:POSTED]->(p)
 "#;
 
-const ADD_REPOST: &str = r#"
+pub(crate) const ADD_REPOST: &str = r#"
 UNWIND $reposts as repost
-MERGE((u:User {did: repost.out})
+MERGE (u:User {did: repost.out})
 MERGE (v: User {did: repost.in})
+
 MERGE (p: Post {cid: repost.cid})
 MATCH (v)-[:POSTED]->(p)
-MERGE (u)-[r:REPOSTED]->(p)
+CREATE (u)-[r:REPOSTED]->(p)
 
-RETURN u,r,v
 "#;
 
-const RM_FOLLOW: &str = r#"
+pub(crate) const RM_FOLLOW: &str = r#"
 UNWIND $follows as follow
-MERGE((u:User {did: follow.out})
+MERGE (u:User {did: follow.out})
 MERGE (v: User {did: follow.in})
 MATCH (u)-[r:FOLLOWS]->(v)
 DELETE r
-
-RETURN u
 "#;
 
-const RM_LIKE: &str = r#"
+pub(crate) const RM_LIKE: &str = r#"
 UNWIND $likes as like
-MERGE((u:User {did: like.out})
+MERGE (u:User {did: like.out})
 MERGE (v: User {did: like.in})
-MERGE (p: Post {cid: like.cid})
+MATCH (p: Post {cid: like.cid})
 MATCH (v)-[:POSTED]->(p)
 MATCH (u)-[r:LIKES]->(p)
 DELETE r
-
-RETURN u
 "#;
 
-const RM_REPOST: &str = r#"
+pub(crate) const RM_REPOST: &str = r#"
 UNWIND $reposts as repost
-MERGE((u:User {did: repost.out})
+MERGE (u:User {did: repost.out})
 MERGE (v: User {did: repost.in})
 MERGE (p: Post {cid: repost.cid})
 MATCH (v)-[:POSTED]->(p)
 MATCH (u)-[r:REPOSTED]->(p)
 DELETE r
-
-RETURN u
 "#;
 
-const RM_POST: &str = r#"
+pub(crate) const RM_POST: &str = r#"
 UNWIND $posts as post
-MERGE((u:User {did: post.out})
+MERGE (u:User {did: post.out})
 MATCH (u)-[r:POSTED]->(p) WHERE p.cid = post.cid
 DETACH DELETE p
-RETURN u,p
 "#;

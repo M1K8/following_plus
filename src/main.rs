@@ -1,18 +1,22 @@
-use std::sync::Arc;
-
 use futures_util::StreamExt;
-use serde::Serialize;
+use graph::GraphModel;
 use tokio_tungstenite::connect_async;
 
 pub mod bsky;
 pub mod graph;
+
+const URL: &str = "wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Bluesky firehose websocket URL
-    let url = "wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*";
+
+    let mut graph = GraphModel::new("bolt://localhost:7687", "user", "pass")
+        .await
+        .unwrap();
 
     // Connect to the websocket
-    let (ws_stream, _) = connect_async(url).await?;
+    let (ws_stream, _) = connect_async(URL).await?;
     println!("Connected to Bluesky firehose");
 
     // Split the websocket into sender and receiver
@@ -21,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(message) = read.next().await {
         match Some(message) {
             Some(m) => {
-                let err = bsky::handle_event(m).await;
+                bsky::handle_event(m, &mut graph).await?;
             }
             None => {}
         }

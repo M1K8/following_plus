@@ -1,8 +1,11 @@
+use crate::graph::GraphModel;
+use regex::Regex;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
 pub async fn handle_event(
     evt: Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>,
+    g: &mut GraphModel,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match evt {
         Ok(msg) => {
@@ -12,7 +15,57 @@ pub async fn handle_event(
                     return Err(err.into());
                 }
             };
-            println!("{:?}", deser_evt);
+            let commit: &Commit = match &deser_evt.commit {
+                Some(m) => m,
+                None => {
+                    return Ok(());
+                }
+            };
+
+            if commit.operation == "create" {
+                match commit.collection.as_str() {
+                    "app.bsky.feed.post" => {
+                        g.add_post(deser_evt.did, commit.cid.clone().unwrap())
+                            .await?;
+                    }
+                    "app.bsky.feed.like" => {
+                        let mut did_in = "";
+                        let mut cid = "";
+                        match &commit.record {
+                            Some(r) => {
+                                cid = match &r.subject {
+                                    Some(s) => match s {
+                                        Subj::T1(_) => "",
+                                        Subj::T2(subject) => {
+                                            let re = Regex::new(r"did:plc:[a-zA-Z0-9]+").unwrap();
+                                            if let Some(mat) = re.find(&subject.uri) {
+                                                did_in = mat.as_str();
+                                            }
+                                            &subject.cid
+                                        }
+                                    },
+                                    None => "",
+                                };
+                            }
+                            None => {}
+                        }
+                        if did_in == "" {
+                            panic!("empty did_in");
+                        }
+
+                        if cid == "" {
+                            panic!("empty cid");
+                        }
+
+                        g.add_like(deser_evt.did, did_in.to_string(), cid.to_string())
+                            .await?;
+                    }
+                    _ => {
+                        //println!("{:?}", commit.collection.as_str());
+                    }
+                }
+            }
+
             return Ok(());
         }
         Err(err) => {
