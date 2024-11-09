@@ -7,6 +7,7 @@ pub mod graph;
 
 const URL: &str = "wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*";
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Bluesky firehose websocket URL
@@ -22,6 +23,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Split the websocket into sender and receiver
     let (_write, mut read) = ws_stream.split();
 
+    // Main logic - spin off in separate thread & bung behind queue
+    // So we can turn the tap on & off (a la trapwire)
+    // i.e have a mtx, lock when pruning (but let the queue build up in the interim)
+    // probably have an event queue of ~1000 evts for safety
     while let Some(message) = read.next().await {
         match Some(message) {
             Some(m) => {

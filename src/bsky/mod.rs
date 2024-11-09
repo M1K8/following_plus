@@ -1,5 +1,4 @@
 use crate::graph::GraphModel;
-use regex::Regex;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
@@ -28,8 +27,7 @@ pub async fn handle_event(
                         g.add_post(deser_evt.did, commit.cid.clone().unwrap())
                             .await?;
                     }
-                    "app.bsky.feed.like" => {
-                        let mut did_in = "";
+                    "app.bsky.feed.repost" => {
                         let mut cid = "";
                         match &commit.record {
                             Some(r) => {
@@ -37,12 +35,55 @@ pub async fn handle_event(
                                     Some(s) => match s {
                                         Subj::T1(_) => "",
                                         Subj::T2(subject) => {
-                                            let re = Regex::new(r"did:plc:[a-zA-Z0-9]+").unwrap();
-                                            if let Some(mat) = re.find(&subject.uri) {
-                                                did_in = mat.as_str();
-                                            }
+                                            // let re = Regex::new(r"did:plc:[a-zA-Z0-9]+").unwrap();
+                                            // if let Some(mat) = re.find(&subject.uri) {
+                                            //     did_in = mat.as_str();
+                                            // }
                                             &subject.cid
                                         }
+                                    },
+                                    None => "",
+                                };
+                            }
+                            None => {}
+                        }
+
+                        if cid == "" {
+                            panic!("empty cid");
+                        }
+
+                        g.add_repost(deser_evt.did, cid.to_string()).await?;
+                    }
+
+                    "app.bsky.feed.like" => {
+                        let mut cid = "";
+                        match &commit.record {
+                            Some(r) => {
+                                cid = match &r.subject {
+                                    Some(s) => match s {
+                                        Subj::T1(_) => "",
+                                        Subj::T2(subject) => &subject.cid,
+                                    },
+                                    None => "",
+                                };
+                            }
+                            None => {}
+                        }
+
+                        if cid == "" {
+                            panic!("empty cid");
+                        }
+
+                        g.add_like(deser_evt.did, cid.to_string()).await?;
+                    }
+                    "app.bsky.graph.follow" => {
+                        let mut did_in = "";
+                        match &commit.record {
+                            Some(r) => {
+                                did_in = match &r.subject {
+                                    Some(s) => match s {
+                                        Subj::T1(s) => s,
+                                        Subj::T2(_) => "",
                                     },
                                     None => "",
                                 };
@@ -53,15 +94,10 @@ pub async fn handle_event(
                             panic!("empty did_in");
                         }
 
-                        if cid == "" {
-                            panic!("empty cid");
-                        }
-
-                        g.add_like(deser_evt.did, did_in.to_string(), cid.to_string())
-                            .await?;
+                        g.add_follow(deser_evt.did, did_in.to_string()).await?;
                     }
                     _ => {
-                        //println!("{:?}", commit.collection.as_str());
+                        //println!("{:?}", commit.record);
                     }
                 }
             }
