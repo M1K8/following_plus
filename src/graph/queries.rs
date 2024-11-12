@@ -15,7 +15,7 @@ MERGE (v)-[r:LIKES]->(p)
 pub(crate) const ADD_POST: &str = r#"
 UNWIND $posts as post
 MERGE (u:User {did: post.did})
-CREATE (u)-[:POSTED]->(p: Post {cid: post.cid, epoch: timestamp() } )
+CREATE (u)-[:POSTED]->(p: Post {cid: post.cid, timestamp: timestamp(), uri: post.uri } )
 "#;
 
 pub(crate) const ADD_REPOST: &str = r#"
@@ -24,7 +24,14 @@ MATCH (p:Post) WHERE p.cid = repost.cid
 MERGE (u:User {did: repost.out})
 
 CREATE (u)-[r:REPOSTED]->(p)
+"#;
 
+pub(crate) const ADD_REPLY: &str = r#"
+UNWIND $replies as reply
+MERGE (u:User {did: reply.out})
+MATCH (p:Post) WHERE p.cid = reply.cid
+
+CREATE (u)-[r:REPLIED_TO]->(p)
 "#;
 
 pub(crate) const RM_FOLLOW: &str = r#"

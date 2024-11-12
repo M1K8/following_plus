@@ -2,12 +2,17 @@ use crate::graph::GraphModel;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
+fn get_post_uri(did: String, rkey: String) -> String {
+    format!("at://{did}/app.bsky.feed.post/{rkey}")
+}
+
 pub async fn handle_event(
     evt: Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>,
     g: &mut GraphModel,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match evt {
         Ok(msg) => {
+            let mm = msg.clone().into_text();
             let deser_evt: BskyEvent = match serde_json::from_slice(msg.into_data().as_slice()) {
                 Ok(m) => m,
                 Err(err) => {
@@ -21,11 +26,18 @@ pub async fn handle_event(
                 }
             };
 
+            // Check for deletes too (unlikes, unfollows)
             if commit.operation == "create" {
                 match commit.collection.as_str() {
                     "app.bsky.feed.post" => {
-                        g.add_post(deser_evt.did, commit.cid.clone().unwrap())
-                            .await?;
+                        let did = deser_evt.did.clone();
+                        let rkey = commit.rkey.clone();
+                        g.add_post(
+                            deser_evt.did,
+                            commit.cid.clone().unwrap(),
+                            get_post_uri(did, rkey),
+                        )
+                        .await?;
                     }
                     "app.bsky.feed.repost" => {
                         let mut cid = "";
@@ -34,13 +46,7 @@ pub async fn handle_event(
                                 cid = match &r.subject {
                                     Some(s) => match s {
                                         Subj::T1(_) => "",
-                                        Subj::T2(subject) => {
-                                            // let re = Regex::new(r"did:plc:[a-zA-Z0-9]+").unwrap();
-                                            // if let Some(mat) = re.find(&subject.uri) {
-                                            //     did_in = mat.as_str();
-                                            // }
-                                            &subject.cid
-                                        }
+                                        Subj::T2(subject) => &subject.cid,
                                     },
                                     None => "",
                                 };
@@ -97,7 +103,31 @@ pub async fn handle_event(
                         g.add_follow(deser_evt.did, did_in.to_string()).await?;
                     }
                     _ => {
-                        //println!("{:?}", commit.record);
+                        println!("{:?}", commit.collection);
+                    }
+                }
+            } else if commit.operation == "delete" {
+                match commit.collection.as_str() {
+                    "app.bsky.feed.post" => {
+                        println!("{:?}", commit);
+                        //g.rm_post(deser_evt.did, commit.cid.clone().unwrap())
+                        //    .await?;
+                    }
+                    "app.bsky.feed.repost" => {
+                        println!("{:?}", commit);
+                        // g.rm_repost(deser_evt.did, cid.to_string()).await?;
+                    }
+
+                    "app.bsky.feed.like" => {
+                        println!("{:?}", commit);
+                        // g.rm_like(deser_evt.did, cid.to_string()).await?;
+                    }
+                    "app.bsky.graph.follow" => {
+                        println!("{:?}", commit);
+                        //g.rm_follow(deser_evt.did, did_in.to_string()).await?;
+                    }
+                    _ => {
+                        println!("{:?}", commit.collection);
                     }
                 }
             }
@@ -140,6 +170,21 @@ pub struct Record {
     pub subject: Option<Subj>,
     pub lang: Option<Vec<String>>,
     pub text: Option<String>,
+    pub reply: Option<Reply>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Reply {
+    pub parent: Parent,
+    pub root: Parent,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Parent {
+    pub cid: String,
+    pub uri: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -13,7 +13,6 @@ pub struct GraphModel {
     repost_queue: Vec<HashMap<String, String>>,
     follow_queue: Vec<HashMap<String, String>>,
 }
-
 impl GraphModel {
     pub async fn new(uri: &str, user: &str, pass: &str) -> Result<Self, neo4rs::Error> {
         let cfg = ConfigBuilder::new()
@@ -38,13 +37,19 @@ impl GraphModel {
         })
     }
 
-    pub async fn add_post(&mut self, did: String, cid: String) -> Result<(), neo4rs::Error> {
+    pub async fn add_post(
+        &mut self,
+        did: String,
+        cid: String,
+        uri: String,
+    ) -> Result<(), neo4rs::Error> {
         // Refac into a queue, have separate runner draining queue continuously
         // Do we even need to though?
         if self.post_queue.len() >= Q_LIMIT {
             let mut params = HashMap::new();
             params.insert("did".to_string(), did.clone());
             params.insert("cid".to_string(), cid.clone());
+            params.insert("uri".to_string(), uri.clone());
             self.post_queue.push(params);
 
             let n = Instant::now();
@@ -63,6 +68,7 @@ impl GraphModel {
         let mut h = HashMap::new();
         h.insert("did".to_string(), did.clone());
         h.insert("cid".to_string(), cid.clone());
+        h.insert("uri".to_string(), uri.clone());
         self.post_queue.push(h);
         Ok(())
     }
@@ -161,16 +167,15 @@ impl GraphModel {
         Ok(())
     }
 
+    pub async fn rm_repost(&self, did: String, cid: String) -> Result<(), neo4rs::Error> {
+        Ok(())
+    }
+
     pub async fn rm_follow(&self, did_out: String, did_in: String) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 
-    pub async fn rm_like(
-        &self,
-        did_out: String,
-        did_in: String,
-        cid: String,
-    ) -> Result<(), neo4rs::Error> {
+    pub async fn rm_like(&self, did_out: String, cid: String) -> Result<(), neo4rs::Error> {
         Ok(())
     }
 }
