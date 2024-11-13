@@ -1,37 +1,44 @@
 pub(crate) const ADD_FOLLOW: &str = r#"
 UNWIND $follows as follow
 MERGE (u:User {did: follow.out})
-MERGE (v:User {did: follow.in})
-MERGE (u)-[r:FOLLOWS]->(v)
+MERGE (v:User {did: follow._in})
+MERGE (u)-[r:FOLLOWS {rkey: follow.rkey }]->(v)
+"#;
+
+pub(crate) const ADD_BLOCK: &str = r#"
+UNWIND $blocks as block
+MERGE (u:User {did: block.out})
+MERGE (v:User {did: block._in})
+MERGE (u)-[r:BLOCKED {rkey: block.rkey }]->(v)
 "#;
 
 pub(crate) const ADD_LIKE: &str = r#"
 UNWIND $likes as like
 MATCH (p:Post) WHERE p.cid = like.cid
 MERGE (v:User {did: like.out})
-MERGE (v)-[r:LIKES]->(p)
+MERGE (v)-[r:LIKES {rkey: like.rkey }]->(p)
 "#;
 
 pub(crate) const ADD_POST: &str = r#"
 UNWIND $posts as post
 MERGE (u:User {did: post.did})
-CREATE (u)-[:POSTED]->(p: Post {cid: post.cid, timestamp: timestamp(), uri: post.uri } )
-"#;
+CREATE (u)-[:POSTED]->(p: Post {cid: post.cid, timestamp: timestamp(), rkey: post.rkey } )
+"#; // we dont need to store the URI, because we can infer it from the posted rKey & the did
 
 pub(crate) const ADD_REPOST: &str = r#"
 UNWIND $reposts as repost
 MATCH (p:Post) WHERE p.cid = repost.cid
 MERGE (u:User {did: repost.out})
 
-CREATE (u)-[r:REPOSTED]->(p)
+CREATE (u)-[r:REPOSTED {rkey: repost.rkey }]->(p)
 "#;
 
 pub(crate) const ADD_REPLY: &str = r#"
 UNWIND $replies as reply
-MERGE (u:User {did: reply.out})
-MATCH (p:Post) WHERE p.cid = reply.cid
+MATCH (p:Post) WHERE p.cid = reply.parent
+MERGE (u:User {did: reply.did})
 
-CREATE (u)-[r:REPLIED_TO]->(p)
+CREATE (u)-[r:REPLIED_TO {rkey: reply.rkey }]->(p)
 "#;
 
 pub(crate) const RM_FOLLOW: &str = r#"
