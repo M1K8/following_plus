@@ -29,7 +29,7 @@ pub struct Record {
     pub type_field: String,
     pub created_at: String,
     pub subject: Option<Subj>,
-    pub lang: Option<Vec<String>>,
+    pub lang: Option<String>,
     pub text: Option<String>,
     pub reply: Option<Reply>,
 }
