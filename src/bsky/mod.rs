@@ -4,6 +4,7 @@ use crate::bsky::types::*;
 use crate::graph::GraphModel;
 use chrono::Utc;
 
+
 mod types;
 
 pub async fn handle_event(
@@ -60,7 +61,8 @@ pub async fn handle_event(
                             _ => {}
                         }
 
-                        g.add_post(&deser_evt.did, &rkey, is_reply).await?;
+                        g.add_post(&deser_evt.did, &rkey, &deser_evt.time_us, is_reply)
+                            .await?;
                     }
 
                     "app.bsky.feed.repost" => {
@@ -157,6 +159,9 @@ pub async fn handle_event(
                         //println!("{:?}", deser_evt);
                     }
                 }
+            } else {
+                // TODO - Handle Updates (lists, starterpacks?)
+                //println!("{:?}", deser_evt.commit.unwrap().collection);
             }
 
             return Ok(());

@@ -1,9 +1,12 @@
 use neo4rs::{ConfigBuilder, Graph};
+use std::sync::Arc;
 use std::{collections::HashMap, mem, time::Instant};
+use tokio::sync::Mutex;
 //use whirlwind::ShardSet;
 mod queries;
 
 const Q_LIMIT: usize = 75;
+const PURGE_TIME: u64 = 60 * 60;
 
 macro_rules! add_to_queue {
     ($query_name:expr, $self:ident, $( $arg:ident ),+) => {{
@@ -24,6 +27,7 @@ macro_rules! add_to_queue {
 
         // Check if the queue is full
         if queue.0.len() >= Q_LIMIT {
+            let _lock = $self.purge_spin.lock().await;
             queue.0.push(params);
 
             let n = Instant::now();
@@ -38,6 +42,7 @@ macro_rules! add_to_queue {
                     return Err(e);
                 }
             };
+            drop(_lock);
 
             let el = n.elapsed().as_millis();
             if el > 3 {
@@ -74,7 +79,8 @@ macro_rules! remove_from_queue {
         )*
 
         // Check if the queue is full
-        if queue.0.len() >= (Q_LIMIT / 10) { //rarer
+        if queue.0.len() >= (Q_LIMIT / 5) { //rarer
+            let _lock = $self.purge_spin.lock().await;
             queue.0.push(params);
 
             let n = Instant::now();
@@ -89,6 +95,7 @@ macro_rules! remove_from_queue {
                     return Err(e);
                 }
             };
+            drop(_lock);
 
             let el = n.elapsed().as_millis();
             if el > 3 {
@@ -111,6 +118,7 @@ macro_rules! remove_from_queue {
 #[derive(Clone)]
 pub struct GraphModel {
     inner: Graph,
+    purge_spin: Arc<Mutex<()>>,
     like_queue: Vec<HashMap<String, String>>,
     post_queue: Vec<HashMap<String, String>>,
     reply_queue: Vec<HashMap<String, String>>,
@@ -124,6 +132,17 @@ pub struct GraphModel {
     rm_repost_queue: Vec<HashMap<String, String>>,
     rm_follow_queue: Vec<HashMap<String, String>>,
     rm_block_queue: Vec<HashMap<String, String>>,
+}
+
+pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4rs::Error> {
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
+        println!("Purging old posts");
+        let _lock = spin.lock().await;
+        let qry = neo4rs::query(queries::PURGE_OLD_POSTS);
+        conn.run(qry).await?;
+        println!("Done!");
+    }
 }
 
 impl GraphModel {
@@ -141,27 +160,22 @@ impl GraphModel {
         inner
             .run(neo4rs::query("CREATE INDEX ON :Post(rkey)"))
             .await?;
-        // inner
-        //     .run(neo4rs::query("CREATE EDGE INDEX ON :FOLLOWS(rkey)"))
-        //     .await?;
-        // inner
-        //     .run(neo4rs::query("CREATE EDGE INDEX ON :LIKES(rkey)"))
-        //     .await?;
-        // inner
-        //     .run(neo4rs::query("CREATE EDGE INDEX ON :POSTED(rkey)"))
-        //     .await?;
-        // inner
-        //     .run(neo4rs::query("CREATE EDGE INDEX ON :REPOSTED(rkey)"))
-        //     .await?;
-        // inner
-        //     .run(neo4rs::query("CREATE EDGE INDEX ON :BLOCKED(rkey)"))
-        //     .await?;
-        // inner
-        //     .run(neo4rs::query("CREATE EDGE INDEX ON :REPLIED_TO(rkey)"))
-        //     .await?;
 
-        Ok(Self {
+        // Set off background job to do whatever cleaning we want
+        let purge_spin = Arc::new(Mutex::new(()));
+        let spin = purge_spin.clone();
+        let inner_cron = inner.clone();
+
+        tokio::spawn(async move {
+            match kickoff_purge(spin, inner_cron).await {
+                Ok(_) => {}
+                Err(e) => panic!("Error purging old posts, aborting: {}", e),
+            };
+        });
+
+        let res = Self {
             inner,
+            purge_spin,
             like_queue: Default::default(),
             post_queue: Default::default(),
             follow_queue: Default::default(),
@@ -175,7 +189,9 @@ impl GraphModel {
             rm_repost_queue: Default::default(),
             rm_block_queue: Default::default(),
             rm_reply_queue: Default::default(),
-        })
+        };
+
+        Ok(res)
     }
 
     pub async fn add_reply(
@@ -191,6 +207,7 @@ impl GraphModel {
         &mut self,
         did: &String,
         rkey: &String,
+        timestamp: &i64,
         is_reply: bool,
     ) -> Result<(), neo4rs::Error> {
         let is_reply = if is_reply {
@@ -198,7 +215,8 @@ impl GraphModel {
         } else {
             "n".to_owned()
         };
-        add_to_queue!("post", self, did, rkey, is_reply)
+        let timestamp = format! {"{timestamp}"};
+        add_to_queue!("post", self, did, rkey, is_reply, timestamp)
     }
 
     pub async fn add_repost(

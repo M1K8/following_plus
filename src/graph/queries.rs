@@ -23,7 +23,7 @@ CREATE (u)-[r:LIKES {rkey: like.rkey }]->(p)
 pub(crate) const ADD_POST: &str = r#"
 UNWIND $posts as post
 MERGE (u:User {did: post.did})
-CREATE (u)-[:POSTED {rkey : post.rkey}]->(p: Post { timestamp: timestamp(), rkey: post.rkey, isReply: post.isReply } )
+CREATE (u)-[:POSTED {rkey : post.rkey}]->(p: Post { timestamp: post.timestamp, rkey: post.rkey, isReply: post.isReply } )
 "#;
 
 pub(crate) const ADD_REPOST: &str = r#"
@@ -40,7 +40,7 @@ MERGE (u:User {did: reply.did})
 CREATE (u)-[r:REPLIED_TO {rkey: reply.rkey }]->(p)
 "#;
 
-///////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) const REMOVE_LIKE: &str = r#"
 UNWIND $likes as like
@@ -78,4 +78,49 @@ pub(crate) const REMOVE_REPOST: &str = r#"
 UNWIND $reposts as repost
 MATCH (:User {did: repost.out})-[r:REPOSTED {rkey: repost.rkey }]->()
 DELETE r
+"#;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub(crate) const PURGE_OLD_POSTS: &str = r#"
+MATCH (p:Post) where toInteger(p.timestamp) < timestamp() - (86400000000) // 24 hours
+DETACH DELETE p
+"#;
+
+pub(crate) const PURGE_NO_FOLLOWERS: &str = r#"
+MATCH (:User)-[r:FOLLOWS]->(p:User)
+WITH p, count(r) as followers
+WHERE followers < 1
+DETACH DELETE p
+"#;
+
+pub(crate) const PURGE_NO_FOLLOWING: &str = r#"
+MATCH (p:User)-[r:FOLLOWS]->(:User)
+WITH p, count(r) as following
+WHERE following < 1
+DETACH DELETE p
+"#;
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub(crate) const GET_FOLLOW_POSTS: &str = r#"
+MATCH (og:User {did: $did})-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
+WITH u,p,og
+OPTIONAL MATCH (og)-[f:FOLLOWS]->(u)
+WITH u, p, CASE WHEN f IS NULL 
+  THEN p ELSE NULL END AS posts
+WHERE posts IS NOT NULL
+RETURN u, posts
+"#;
+
+
+
+pub(crate) const GET_2ND_DEG_FOLLOW_POSTS: &str = r#"
+MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
+WITH u,p,og
+OPTIONAL MATCH (og)-[f:FOLLOWS]->(u)
+WITH u, p, CASE WHEN f IS NULL 
+  THEN p ELSE NULL END AS posts
+WHERE posts IS NOT NULL
+RETURN u, posts
 "#;
