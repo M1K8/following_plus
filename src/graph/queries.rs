@@ -113,8 +113,6 @@ WHERE posts IS NOT NULL
 RETURN u, posts
 "#;
 
-
-
 pub(crate) const GET_2ND_DEG_FOLLOW_POSTS: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
 WITH u,p,og

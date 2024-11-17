@@ -4,7 +4,6 @@ use crate::bsky::types::*;
 use crate::graph::GraphModel;
 use chrono::Utc;
 
-
 mod types;
 
 pub async fn handle_event(
@@ -47,21 +46,31 @@ pub async fn handle_event(
 
             if commit.operation == "create" {
                 let mut is_reply = false;
+                let mut is_image = false;
+                let mut created_at = 0;
                 match commit.collection.as_str() {
                     "app.bsky.feed.post" => {
                         match &commit.record {
-                            Some(r) => match &r.reply {
-                                Some(r) => {
-                                    let rkey_parent = parse_rkey(&r.parent.uri);
-                                    g.add_reply(&deser_evt.did, &rkey, &rkey_parent).await?;
-                                    is_reply = true;
+                            Some(r) => {
+                                is_image = r.images.is_some();
+                                created_at =
+                                    match chrono::DateTime::parse_from_rfc3339(&r.created_at) {
+                                        Ok(t) => t.timestamp_micros(),
+                                        Err(_) => deser_evt.time_us,
+                                    };
+                                match &r.reply {
+                                    Some(r) => {
+                                        let rkey_parent = parse_rkey(&r.parent.uri);
+                                        g.add_reply(&deser_evt.did, &rkey, &rkey_parent).await?;
+                                        is_reply = true;
+                                    }
+                                    _ => {}
                                 }
-                                _ => {}
-                            },
+                            }
                             _ => {}
                         }
 
-                        g.add_post(&deser_evt.did, &rkey, &deser_evt.time_us, is_reply)
+                        g.add_post(&deser_evt.did, &rkey, &created_at, is_reply, is_image)
                             .await?;
                     }
 

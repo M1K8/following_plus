@@ -1,11 +1,11 @@
 use neo4rs::{ConfigBuilder, Graph};
 use std::sync::Arc;
 use std::{collections::HashMap, mem, time::Instant};
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 //use whirlwind::ShardSet;
 mod queries;
 
-const Q_LIMIT: usize = 75;
+const Q_LIMIT: usize = 70;
 const PURGE_TIME: u64 = 60 * 60;
 
 macro_rules! add_to_queue {
@@ -115,7 +115,6 @@ macro_rules! remove_from_queue {
     }};
 }
 
-#[derive(Clone)]
 pub struct GraphModel {
     inner: Graph,
     purge_spin: Arc<Mutex<()>>,
@@ -145,8 +144,33 @@ pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4
     }
 }
 
+pub async fn listen_channel(
+    spin: Arc<Mutex<()>>,
+    conn: Graph,
+    mut recv: mpsc::Receiver<String>,
+) -> Result<(), neo4rs::Error> {
+    loop {
+        let did = match recv.recv().await {
+            Some(s) => s,
+            None => continue,
+        };
+
+        // call getFollowers & getFollowing
+        // then queue them to write to the db - acquire the lock and write
+    }
+}
+
 impl GraphModel {
-    pub async fn new(uri: &str, user: &str, pass: &str) -> Result<Self, neo4rs::Error> {
+    pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.purge_spin.lock().await
+    }
+
+    pub async fn new(
+        uri: &str,
+        user: &str,
+        pass: &str,
+        recv: mpsc::Receiver<String>,
+    ) -> Result<Self, neo4rs::Error> {
         let cfg = ConfigBuilder::new()
             .uri(uri)
             .user(user)
@@ -166,10 +190,20 @@ impl GraphModel {
         let spin = purge_spin.clone();
         let inner_cron = inner.clone();
 
+        let spin2 = purge_spin.clone();
+        let inner_cron2 = inner.clone();
+
         tokio::spawn(async move {
             match kickoff_purge(spin, inner_cron).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error purging old posts, aborting: {}", e),
+            };
+        });
+
+        tokio::spawn(async move {
+            match listen_channel(spin2, inner_cron2, recv).await {
+                Ok(_) => {}
+                Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };
         });
 
@@ -209,14 +243,21 @@ impl GraphModel {
         rkey: &String,
         timestamp: &i64,
         is_reply: bool,
+        is_image: bool,
     ) -> Result<(), neo4rs::Error> {
         let is_reply = if is_reply {
             "y".to_owned()
         } else {
             "n".to_owned()
         };
+
+        let is_image = if is_image {
+            "y".to_owned()
+        } else {
+            "n".to_owned()
+        };
         let timestamp = format! {"{timestamp}"};
-        add_to_queue!("post", self, did, rkey, is_reply, timestamp)
+        add_to_queue!("post", self, did, rkey, is_reply, is_image, timestamp)
     }
 
     pub async fn add_repost(

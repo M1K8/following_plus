@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
@@ -8,6 +10,8 @@ pub struct BskyEvent {
     #[serde(rename = "time_us")]
     pub time_us: i64,
     pub kind: String,
+    #[serde(rename = "type")]
+    pub type_field: Option<String>,
     pub commit: Option<Commit>,
 }
 
@@ -30,8 +34,46 @@ pub struct Record {
     pub created_at: String,
     pub subject: Option<Subj>,
     pub lang: Option<String>,
+    pub langs: Option<Vec<String>>,
     pub text: Option<String>,
     pub reply: Option<Reply>,
+    pub embed: Option<Embed>,
+    pub images: Option<Vec<Image>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Image {
+    pub alt: String,
+    pub aspect_ratio: HashMap<String, String>,
+    pub image: ImageInternal,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageInternal {
+    #[serde(rename = "$type")]
+    pub type_field: String,
+    #[serde(rename = "ref")]
+    pub reff: Ref,
+    pub mime_type: String,
+    pub size: u64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Ref {
+    #[serde(rename = "$link")]
+    pub link: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Embed {
+    #[serde(rename = "$type")]
+    pub type_field: String,
+    pub uri: Option<String>,
+    pub embedded: Option<Embd>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,6 +100,13 @@ pub struct Subject {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Subj {
+    T1(String),
+    T2(Subject),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Embd {
     T1(String),
     T2(Subject),
 }
