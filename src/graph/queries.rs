@@ -88,17 +88,19 @@ DETACH DELETE p
 "#;
 
 pub(crate) const PURGE_NO_FOLLOWERS: &str = r#"
-MATCH (:User)-[r:FOLLOWS]->(p:User)
-WITH p, count(r) as followers
-WHERE followers < 1
-DETACH DELETE p
+MATCH (u:User)
+OPTIONAL MATCH (:User)-[r:FOLLOWS]->(u)
+WITH u, count(r) as followers 
+WHERE followers = 0
+DETACH DELETE u
 "#;
 
 pub(crate) const PURGE_NO_FOLLOWING: &str = r#"
-MATCH (p:User)-[r:FOLLOWS]->(:User)
-WITH p, count(r) as following
-WHERE following < 1
-DETACH DELETE p
+MATCH (u:User)
+OPTIONAL MATCH (u:User)-[r:FOLLOWS]->(:User)
+WITH u, count(r) as follows 
+WHERE follows = 0
+DETACH DELETE u
 "#;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

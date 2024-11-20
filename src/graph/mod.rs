@@ -2,11 +2,12 @@ use neo4rs::{ConfigBuilder, Graph};
 use std::sync::Arc;
 use std::{collections::HashMap, mem, time::Instant};
 use tokio::sync::{mpsc, Mutex};
-//use whirlwind::ShardSet;
+
+use crate::common::FetchMessage;
 mod queries;
 
 const Q_LIMIT: usize = 70;
-const PURGE_TIME: u64 = 60 * 60;
+const PURGE_TIME: u64 = 45 * 60;
 
 macro_rules! add_to_queue {
     ($query_name:expr, $self:ident, $( $arg:ident ),+) => {{
@@ -20,9 +21,9 @@ macro_rules! add_to_queue {
             _ => panic!("unknown query name")
         };
         // Helper to build the argument map with variable names as keys
-        let mut params = HashMap::new();
+        let mut params = HashMap::<String, String>::new();
         $(
-            params.insert(stringify!($arg).to_string(), $arg.clone());
+            params.insert(stringify!($arg).to_string(), $arg);
         )*
 
         // Check if the queue is full
@@ -52,11 +53,12 @@ macro_rules! add_to_queue {
                     el,
                     (1000000000 / n.elapsed().as_nanos()) as f64 * Q_LIMIT as f64
                 );
+                return Ok((true));
             }
-            Ok(())
+            Ok((false))
         } else {
             queue.0.push(params);
-            Ok(())
+            Ok((false))
         }
     }};
 }
@@ -75,7 +77,7 @@ macro_rules! remove_from_queue {
         // Helper to build the argument map with variable names as keys
         let mut params = HashMap::new();
         $(
-            params.insert(stringify!($arg).to_string(), $arg.clone());
+            params.insert(stringify!($arg).to_string(), $arg);
         )*
 
         // Check if the queue is full
@@ -84,6 +86,7 @@ macro_rules! remove_from_queue {
             queue.0.push(params);
 
             let n = Instant::now();
+
 
             // Move queue values without copying
             let q = mem::take(queue.0);
@@ -105,12 +108,13 @@ macro_rules! remove_from_queue {
                     el,
                     (1000000000 / n.elapsed().as_nanos()) as f64 * Q_LIMIT as f64
                 );
+                return Ok((true));
             }
+            Ok((false))
 
-            Ok(())
         } else {
             queue.0.push(params);
-            Ok(())
+            Ok((false))
         }
     }};
 }
@@ -145,15 +149,17 @@ pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4
 }
 
 pub async fn listen_channel(
-    spin: Arc<Mutex<()>>,
+    write_lock: Arc<Mutex<()>>,
     conn: Graph,
-    mut recv: mpsc::Receiver<String>,
+    mut recv: mpsc::Receiver<FetchMessage>,
 ) -> Result<(), neo4rs::Error> {
     loop {
         let did = match recv.recv().await {
             Some(s) => s,
             None => continue,
         };
+
+        println!("Got event for {:?}", did);
 
         // call getFollowers & getFollowing
         // then queue them to write to the db - acquire the lock and write
@@ -165,11 +171,15 @@ impl GraphModel {
         self.purge_spin.lock().await
     }
 
+    pub fn inner(&self) -> Graph {
+        self.inner.clone()
+    }
+
     pub async fn new(
         uri: &str,
         user: &str,
         pass: &str,
-        recv: mpsc::Receiver<String>,
+        recv: mpsc::Receiver<FetchMessage>,
     ) -> Result<Self, neo4rs::Error> {
         let cfg = ConfigBuilder::new()
             .uri(uri)
@@ -187,21 +197,23 @@ impl GraphModel {
 
         // Set off background job to do whatever cleaning we want
         let purge_spin = Arc::new(Mutex::new(()));
-        let spin = purge_spin.clone();
-        let inner_cron = inner.clone();
+        let write_lock = purge_spin.clone();
+        let inner_conn = inner.clone();
 
-        let spin2 = purge_spin.clone();
-        let inner_cron2 = inner.clone();
+        // We also want a task to listen for first time user requests
+        // As we want to fetch all followers & follows
+        let write_lock2 = purge_spin.clone();
+        let inner_conn2 = inner.clone();
 
         tokio::spawn(async move {
-            match kickoff_purge(spin, inner_cron).await {
+            match kickoff_purge(write_lock, inner_conn).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error purging old posts, aborting: {}", e),
             };
         });
 
         tokio::spawn(async move {
-            match listen_channel(spin2, inner_cron2, recv).await {
+            match listen_channel(write_lock2, inner_conn2, recv).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };
@@ -230,21 +242,21 @@ impl GraphModel {
 
     pub async fn add_reply(
         &mut self,
-        did: &String,
-        rkey: &String,
-        parent: &String,
-    ) -> Result<(), neo4rs::Error> {
+        did: String,
+        rkey: String,
+        parent: String,
+    ) -> Result<bool, neo4rs::Error> {
         add_to_queue!("reply", self, did, rkey, parent)
     }
 
     pub async fn add_post(
         &mut self,
-        did: &String,
-        rkey: &String,
+        did: String,
+        rkey: String,
         timestamp: &i64,
         is_reply: bool,
         is_image: bool,
-    ) -> Result<(), neo4rs::Error> {
+    ) -> Result<bool, neo4rs::Error> {
         let is_reply = if is_reply {
             "y".to_owned()
         } else {
@@ -256,67 +268,69 @@ impl GraphModel {
         } else {
             "n".to_owned()
         };
+
         let timestamp = format! {"{timestamp}"};
+
         add_to_queue!("post", self, did, rkey, is_reply, is_image, timestamp)
     }
 
     pub async fn add_repost(
         &mut self,
-        did: &String,
-        rkey_parent: &String,
-        rkey: &String,
-    ) -> Result<(), neo4rs::Error> {
+        did: String,
+        rkey_parent: String,
+        rkey: String,
+    ) -> Result<bool, neo4rs::Error> {
         add_to_queue!("repost", self, did, rkey, rkey_parent)
     }
 
     pub async fn add_follow(
         &mut self,
-        out: &String,
-        did: &String,
-        rkey: &String,
-    ) -> Result<(), neo4rs::Error> {
+        out: String,
+        did: String,
+        rkey: String,
+    ) -> Result<bool, neo4rs::Error> {
         add_to_queue!("follow", self, out, rkey, did)
     }
 
     pub async fn add_block(
         &mut self,
-        blockee: &String,
-        did: &String,
-        rkey: &String,
-    ) -> Result<(), neo4rs::Error> {
+        blockee: String,
+        did: String,
+        rkey: String,
+    ) -> Result<bool, neo4rs::Error> {
         add_to_queue!("block", self, blockee, rkey, did)
     }
 
     pub async fn add_like(
         &mut self,
-        did: &String,
-        rkey_parent: &String,
-        rkey: &String,
-    ) -> Result<(), neo4rs::Error> {
+        did: String,
+        rkey_parent: String,
+        rkey: String,
+    ) -> Result<bool, neo4rs::Error> {
         add_to_queue!("like", self, did, rkey, rkey_parent)
     }
 
-    pub async fn rm_post(&mut self, did: &String, rkey: &String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_post(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
         remove_from_queue!("post", self, did, rkey)
     }
 
-    pub async fn rm_repost(&mut self, did: &String, rkey: &String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_repost(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
         remove_from_queue!("repost", self, did, rkey)
     }
 
-    pub async fn rm_follow(&mut self, did: &String, rkey: &String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_follow(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
         remove_from_queue!("follow", self, did, rkey)
     }
 
-    pub async fn rm_like(&mut self, did: &String, rkey: &String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_like(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
         remove_from_queue!("like", self, did, rkey)
     }
 
-    pub async fn rm_block(&mut self, did: &String, rkey: &String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_block(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
         remove_from_queue!("block", self, did, rkey)
     }
 
-    pub async fn rm_reply(&mut self, did: &String, rkey: &String) -> Result<(), neo4rs::Error> {
+    pub async fn rm_reply(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
         remove_from_queue!("reply", self, did, rkey)
     }
 }

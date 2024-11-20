@@ -5,6 +5,28 @@ use serde_derive::Serialize;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FollowsResp {
+    pub cursor: Option<String>,
+    pub follows: Vec<Account>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FollowersResp {
+    pub cursor: Option<String>,
+    pub followers: Vec<Account>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Account {
+    pub did: String,
+    pub handle: String,
+    // dont care about the other stuff
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BskyEvent {
     pub did: String,
     #[serde(rename = "time_us")]
