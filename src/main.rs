@@ -1,21 +1,26 @@
 use common::FetchMessage;
-use futures_util::StreamExt;
+use futures_util::lock::Mutex;
 use graph::GraphModel;
 use pprof::protos::Message;
+use tokio::time::Instant;
+use std::sync::atomic::AtomicU16;
+use std::sync::Arc;
 use std::{env, process};
 use std::{fs::File, io::Write, thread};
 use tokio::sync::mpsc;
-use tokio_tungstenite::connect_async;
 
 pub mod bsky;
 pub mod common;
 pub mod graph;
 mod server;
-
-const URL: &str = "wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*";
+mod ws;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let profile = env::var("PROFILE_ENABLE").unwrap_or("".into());
     let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
     let compress;
@@ -75,24 +80,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         url =  format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", "false");
     }
-    let (ws_stream, _) = connect_async(url).await?;
+    let mut ws = ws::connect("jetstream1.us-east.bsky.network", url).await?;
     println!("Connected to Bluesky firehose");
-    // Split the websocket into sender and receiver
-    let (_, mut read) = ws_stream.split();
 
-    while let Some(message) = read.next().await {
-        match Some(message) {
-            Some(m) => {
-                match bsky::handle_event(m, &mut graph, compress).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        println!("Error handling event: {}", e);
-                        let (stream, _) = connect_async(URL).await?;
-                        read = stream.split().1;
+    let  count = Arc::new(Mutex::new(0));
+    let now = Instant::now();
+
+    let cc = count.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            let mut cnt = cc.lock().await;
+            println!("Processed {} posts in {} seconds", *cnt, now.elapsed().as_secs());
+            *cnt = 0;
+            drop(cnt);
+        }
+
+    });
+    while let Ok(msg) = ws.read_frame().await {
+        match msg.opcode {
+            fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
+                let pl: bytes::BytesMut;
+                match msg.payload {
+                    fastwebsockets::Payload::BorrowedMut(b) => {
+                        panic!("borrowed mut");
+                    }
+                    fastwebsockets::Payload::Borrowed(b) => {
+                        panic!("borrowed");
+                    }
+                    fastwebsockets::Payload::Owned(mutvec) => {
+                        panic!("owned vec");
+                    }
+                    fastwebsockets::Payload::Bytes(bytes_mut) => {
+                        pl = bytes_mut;
                     }
                 };
+                bsky::handle_event_fast(&pl, &mut graph, compress).await?;
+                let mut cnt = count.lock().await;
+                *cnt += 1;
+                drop(cnt);
             }
-            None => {}
+            fastwebsockets::OpCode::Close => {
+                println!("1");
+                break;
+            }
+            _ => {}
         }
     }
 
