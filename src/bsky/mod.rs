@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::mem;
 use zstd::bulk::Decompressor;
-mod types;
+pub mod types;
 
 const DICT: &'static [u8; 112640] = include_bytes!("./dictionary");
 static mut DECOMP: Lazy<Decompressor<'static>> =

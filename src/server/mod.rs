@@ -23,10 +23,7 @@ struct StateStruct {
     inner: Graph,
 }
 
-pub async fn serve(
-    chan: Sender<FetchMessage>,
-    inner: Graph,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn serve_slim() -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -36,20 +33,13 @@ pub async fn serve(
             Method::OPTIONS,
         ])
         .allow_origin(Any);
-
-    let state = StateStruct {
-        send_chan: chan.clone(),
-        inner,
-    };
-    let state = Arc::new(state);
     let router = Router::new()
         .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(index))
         .route("/xrpc/app.bsky.feed.describeFeedGenerator", get(describe))
         .route("/.well-known/did.json", get(well_known))
-        .layer(ServiceBuilder::new().layer(cors))
-        .with_state(state);
+        .layer(ServiceBuilder::new().layer(cors));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     let tcp = TcpListener::bind(&addr).await.unwrap();
 
     axum::serve(tcp, router).await.unwrap();
@@ -59,7 +49,6 @@ pub async fn serve(
 async fn index(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
-    State(_state): State<Arc<StateStruct>>,
 ) -> Result<types::Response, ()> {
     let auth;
     println!("{:?}", params);
