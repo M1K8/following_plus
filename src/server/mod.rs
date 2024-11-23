@@ -77,10 +77,10 @@ async fn index(
         }
         None => "".into()    
     };
-    print!("user id {}", iss);
+    println!("user id {}", iss);
 
     Json(types::Response {
-        cursor: None,
+        cursor: Some("123".to_owned()),
         feed: vec![types::Post {
             post: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
                 .to_owned(),
