@@ -66,11 +66,14 @@ async fn index(
 ) -> Result<types::Response, ()> {
     let auth;
     println!("!!!!!");
+    // it works! Everything is on feckin port 443
+    // so we either just forward 443 & put the ting behind an nginx proxy (thanks gpt)
+    // or we just expose a DB svc & deal with the pings from the server <----- will do this
     println!("{:?}", params);
     match bearer {
         Some(s) => {
             auth = s.0 .0.token();
-            auth::verify_jwt(auth, &"".to_owned()).unwrap();
+            auth::verify_jwt(auth, &"did:web:feed.m1k.sh".to_owned()).unwrap();
         }
         None => {}
     }
