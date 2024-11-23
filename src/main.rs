@@ -57,18 +57,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
-    let mut graph = GraphModel::new("bolt://localhost:7687", "user", "pass", recv)
-        .await
-        .unwrap();
 
-    let server_conn = graph.inner();
 
     // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
     thread::spawn(move || {
         let web_runtime: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
         println!("Starting web listener thread");
         let wait = web_runtime.spawn(async move {
-            server::serve(send, server_conn).await.unwrap();
+            server::serve(send).await.unwrap();
         });
         web_runtime.block_on(wait).unwrap();
         println!("Exiting web listener thread");
@@ -97,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         panic!("Unsupported payload type {:?}", msg.payload);
                     }
                 };
-                bsky::handle_event_fast(&pl, &mut graph, compress).await?;
+                
             }
             fastwebsockets::OpCode::Close => {
                 println!("Closing connection");

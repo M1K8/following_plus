@@ -20,12 +20,11 @@ mod auth;
 mod types;
 struct StateStruct {
     send_chan: Sender<FetchMessage>,
-    inner: Graph,
+
 }
 
 pub async fn serve(
     chan: Sender<FetchMessage>,
-    inner: Graph,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_methods([
@@ -43,18 +42,15 @@ pub async fn serve(
     .await
     .unwrap();
 
-    let state = StateStruct {
+    let _state = StateStruct {
         send_chan: chan.clone(),
-        inner,
     };
-    let state = Arc::new(state);
     let router = Router::new()
         .route("/", get(base))
         .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(index))
         .route("/xrpc/app.bsky.feed.describeFeedGenerator", get(describe))
         .route("/.well-known/did.json", get(well_known))
-        .layer(ServiceBuilder::new().layer(cors))
-        .with_state(state);
+        .layer(ServiceBuilder::new().layer(cors));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     axum_server::bind_rustls(addr, config)
@@ -67,7 +63,6 @@ pub async fn serve(
 async fn index(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
-    State(_state): State<Arc<StateStruct>>,
 ) -> Result<types::Response, ()> {
     let auth;
     println!("{:?}", params);
@@ -91,7 +86,6 @@ async fn index(
 async fn base(
     Query(_): Query<HashMap<String, String>>,
     _: Option<TypedHeader<Authorization<Bearer>>>,
-    State(_state): State<Arc<StateStruct>>,
 ) -> Result<String, ()> {
     println!("base");
     Ok("Hello!".into())
