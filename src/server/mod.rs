@@ -63,22 +63,23 @@ pub async fn serve(
 async fn index(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
-) -> Result<types::Response, ()> {
+) -> Json<types::Response> {
     let auth;
     println!("!!!!!");
     // it works! Everything is on feckin port 443
     // so we either just forward 443 & put the ting behind an nginx proxy (thanks gpt)
     // or we just expose a DB svc & deal with the pings from the server <----- will do this
     println!("{:?}", params);
-    match bearer {
+    let iss = match bearer {
         Some(s) => {
             auth = s.0 .0.token();
-            auth::verify_jwt(auth, &"did:web:feed.m1k.sh".to_owned()).unwrap();
+            auth::verify_jwt(auth, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
-        None => {}
-    }
+        None => "".into()    
+    };
+    print!("user id {}", iss);
 
-    Ok(types::Response {
+    Json(types::Response {
         cursor: None,
         feed: vec![types::Post {
             post: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"

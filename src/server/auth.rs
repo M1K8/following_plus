@@ -24,7 +24,6 @@ pub fn verify_jwt(jwtstr: &str, service_did: &String) -> Result<String, String> 
                 return Err("jwt audience does not match service did".into());
             }
             if let Ok(jwtstr) = serde_json::to_string(&payload) {
-                println!("you need to actually do something with this btw {jwtstr}");
                 Ok(jwtstr)
             } else {
                 Err("error parsing payload".into())
