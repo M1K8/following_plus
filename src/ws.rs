@@ -1,3 +1,5 @@
+// Shamelessly yoinked from https://github.com/skyfeed-dev/indexer-rust/blob/main/src/main.rs
+
 use std::{future::Future, sync::Arc};
 
 use fastwebsockets::{handshake, WebSocket};

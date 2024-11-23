@@ -1,10 +1,6 @@
 use common::FetchMessage;
-use futures_util::lock::Mutex;
 use graph::GraphModel;
 use pprof::protos::Message;
-use tokio::time::Instant;
-use std::sync::atomic::AtomicU16;
-use std::sync::Arc;
 use std::{env, process};
 use std::{fs::File, io::Write, thread};
 use tokio::sync::mpsc;
@@ -15,6 +11,8 @@ pub mod graph;
 mod server;
 mod ws;
 
+//RUSTFLAGS="-Cprofile-generate=./pgo-data"     cargo build --release --target=x86_64-unknown-linux-gnu
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rustls::crypto::ring::default_provider()
@@ -24,12 +22,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let profile = env::var("PROFILE_ENABLE").unwrap_or("".into());
     let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
     let compress;
+
     if !compression.is_empty() {
         println!("Compression enabled");
         compress = true;
     } else {
         compress = false;
     }
+
     if !profile.is_empty() {
         let guard = pprof::ProfilerGuardBuilder::default()
             .frequency(1000)
@@ -60,7 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut graph = GraphModel::new("bolt://localhost:7687", "user", "pass", recv)
         .await
         .unwrap();
+
     let server_conn = graph.inner();
+
+    // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
     thread::spawn(move || {
         let web_runtime: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
         println!("Starting web listener thread");
@@ -70,7 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         web_runtime.block_on(wait).unwrap();
         println!("Exiting web listener thread");
     });
-
     //
 
     // Connect to the websocket
@@ -83,45 +85,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url).await?;
     println!("Connected to Bluesky firehose");
 
-    let  count = Arc::new(Mutex::new(0));
-    let now = Instant::now();
-
-    let cc = count.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            let mut cnt = cc.lock().await;
-            println!("Processed {} posts in {} seconds", *cnt, now.elapsed().as_secs());
-            *cnt = 0;
-            drop(cnt);
-        }
-
-    });
     while let Ok(msg) = ws.read_frame().await {
         match msg.opcode {
             fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
                 let pl: bytes::BytesMut;
                 match msg.payload {
-                    fastwebsockets::Payload::BorrowedMut(b) => {
-                        panic!("borrowed mut");
-                    }
-                    fastwebsockets::Payload::Borrowed(b) => {
-                        panic!("borrowed");
-                    }
-                    fastwebsockets::Payload::Owned(mutvec) => {
-                        panic!("owned vec");
-                    }
                     fastwebsockets::Payload::Bytes(bytes_mut) => {
                         pl = bytes_mut;
                     }
+                    _ => {
+                        panic!("Unsupported payload type {:?}", msg.payload);
+                    }
                 };
                 bsky::handle_event_fast(&pl, &mut graph, compress).await?;
-                let mut cnt = count.lock().await;
-                *cnt += 1;
-                drop(cnt);
             }
             fastwebsockets::OpCode::Close => {
-                println!("1");
+                println!("Closing connection");
                 break;
             }
             _ => {}

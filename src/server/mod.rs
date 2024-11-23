@@ -9,13 +9,13 @@ use axum_extra::{
     TypedHeader,
 };
 
-use neo4rs::{ConfigBuilder, Graph};
-use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
-use tokio::{net::TcpListener, sync::mpsc::Sender};
+use crate::common::FetchMessage;
+use axum_server::tls_rustls::RustlsConfig;
+use neo4rs::Graph;
+use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc};
+use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
-
-use crate::common::FetchMessage;
 mod auth;
 mod types;
 struct StateStruct {
@@ -36,6 +36,12 @@ pub async fn serve(
             Method::OPTIONS,
         ])
         .allow_origin(Any);
+    let config = RustlsConfig::from_pem_file(
+        PathBuf::from(".").join("cert.pem"),
+        PathBuf::from(".").join("key.pem"),
+    )
+    .await
+    .unwrap();
 
     let state = StateStruct {
         send_chan: chan.clone(),
@@ -43,16 +49,18 @@ pub async fn serve(
     };
     let state = Arc::new(state);
     let router = Router::new()
+        .route("/", get(base))
         .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(index))
         .route("/xrpc/app.bsky.feed.describeFeedGenerator", get(describe))
         .route("/.well-known/did.json", get(well_known))
         .layer(ServiceBuilder::new().layer(cors))
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
-    let tcp = TcpListener::bind(&addr).await.unwrap();
-
-    axum::serve(tcp, router).await.unwrap();
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    axum_server::bind_rustls(addr, config)
+        .serve(router.into_make_service())
+        .await
+        .unwrap();
     Ok(())
 }
 
@@ -80,8 +88,18 @@ async fn index(
     })
 }
 
+async fn base(
+    Query(_): Query<HashMap<String, String>>,
+    _: Option<TypedHeader<Authorization<Bearer>>>,
+    State(_state): State<Arc<StateStruct>>,
+) -> Result<String, ()> {
+    println!("base");
+    Ok("Hello!".into())
+}
+
 // This needs to be exposed on port 443 too
 async fn well_known() -> Result<Json<types::WellKnown>, ()> {
+    println!("e");
     match env::var("FEEDGEN_SERVICE_DID") {
         Ok(service_did) => {
             let hostname = env::var("FEEDGEN_HOSTNAME").unwrap_or("".into());
@@ -114,7 +132,7 @@ async fn describe() -> Result<Json<types::Describe>, ()> {
     let dezscribe = types::Describe {
         did: format!("did:web:{hostname}"),
         feeds: vec![types::Feed {
-            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/m1k_test_feed"),
+            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/feed.m1k.sh"),
         }],
     };
 
