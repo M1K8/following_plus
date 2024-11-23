@@ -65,6 +65,7 @@ async fn index(
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
 ) -> Result<types::Response, ()> {
     let auth;
+    println!("!!!!!");
     println!("{:?}", params);
     match bearer {
         Some(s) => {
@@ -122,6 +123,7 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
 }
 
 async fn describe() -> Result<Json<types::Describe>, ()> {
+    println!("a");
     let hostname = env::var("FEEDGEN_HOSTNAME").unwrap();
     let dezscribe = types::Describe {
         did: format!("did:web:{hostname}"),
