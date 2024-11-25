@@ -60,13 +60,9 @@ async fn index(
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
     State(_state): State<Arc<StateStruct>>,
 ) -> Json<types::Response> {
-    let auth;
     println!("{:?}", params);
     let iss = match bearer {
-        Some(s) => {
-            auth = s.0 .0.token();
-            auth::verify_jwt(auth, &"did:web:feed.m1k.sh".to_owned()).unwrap()
-        }
+        Some(s) => auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned()).unwrap(),
         None => "".into(),
     };
     println!("user id {}", iss);

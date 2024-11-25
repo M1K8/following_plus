@@ -47,16 +47,12 @@ async fn index(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
 ) -> Json<types::Response> {
-    let auth;
-    println!("{:?}", params);
     let iss = match bearer {
-        Some(s) => {
-            auth = s.0 .0.token();
-            auth::verify_jwt(auth, &"did:web:feed.m1k.sh".to_owned()).unwrap()
-        }
+        Some(s) => auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned()).unwrap(),
         None => "".into(),
     };
     println!("user id {}", iss);
+    let _params = params;
 
     // TODO - Call _the backend_
     // This'll also be spun out as a separate executable anyway (though we'll still)
@@ -75,13 +71,11 @@ async fn base(
     Query(_): Query<HashMap<String, String>>,
     _: Option<TypedHeader<Authorization<Bearer>>>,
 ) -> Result<String, ()> {
-    println!("base");
     Ok("Hello!".into())
 }
 
 // This needs to be exposed on port 443 too
 async fn well_known() -> Result<Json<types::WellKnown>, ()> {
-    println!("e");
     match env::var("FEEDGEN_SERVICE_DID") {
         Ok(service_did) => {
             let hostname = env::var("FEEDGEN_HOSTNAME").unwrap_or("".into());
@@ -110,7 +104,6 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
 }
 
 async fn describe() -> Result<Json<types::Describe>, ()> {
-    println!("a");
     let hostname = env::var("FEEDGEN_HOSTNAME").unwrap();
     let dezscribe = types::Describe {
         did: format!("did:web:{hostname}"),
