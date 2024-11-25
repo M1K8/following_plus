@@ -20,12 +20,9 @@ mod auth;
 mod types;
 struct StateStruct {
     send_chan: Sender<FetchMessage>,
-
 }
 
-pub async fn serve(
-    chan: Sender<FetchMessage>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -65,19 +62,19 @@ async fn index(
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
 ) -> Json<types::Response> {
     let auth;
-    println!("!!!!!");
-    // it works! Everything is on feckin port 443
-    // so we either just forward 443 & put the ting behind an nginx proxy (thanks gpt)
-    // or we just expose a DB svc & deal with the pings from the server <----- will do this
     println!("{:?}", params);
     let iss = match bearer {
         Some(s) => {
             auth = s.0 .0.token();
             auth::verify_jwt(auth, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
-        None => "".into()    
+        None => "".into(),
     };
     println!("user id {}", iss);
+
+    // TODO - Call _the backend_
+    // This'll also be spun out as a separate executable anyway (though we'll still)
+    // need another web server to accept the DB calls - will use Go for that
 
     Json(types::Response {
         cursor: Some("123".to_owned()),

@@ -58,7 +58,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
 
-
     // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
     thread::spawn(move || {
         let web_runtime: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
@@ -93,7 +92,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         panic!("Unsupported payload type {:?}", msg.payload);
                     }
                 };
-                
             }
             fastwebsockets::OpCode::Close => {
                 println!("Closing connection");
@@ -105,27 +103,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-//Todo:
-/*
-- Forward port 80 & 443 to this ip (connect over wifi)
-- Get Cert from Let's Encrypt
-- Setup server
-- Test feed
-- Unregister
-- (and also prune gh tickets xx)
-
-
-
-
-For impl:
-- Store languages
-- Implement messaging logic to request fetches for first user case
-    - Match(u:User) return U; if u.fetched == null, fetch followers, follows & write back to DB
-        - Worth creating accounts if they dont exist even with 0 posts, because otherwise it wont be recorded
-- For a start try returning 2nd degree posts to test latency
-- Add read replica
-- Have some kind of cursoring; either pre-fetching a load and trickle-feeding it back, or take note of the oldest post returned & use that in query
-(e.g if we LIMIT 50, then the next query will match only for p.timestamp < cursor'd timestamp)
-- Tweak algo+++++
-*/

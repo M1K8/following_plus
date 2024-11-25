@@ -57,15 +57,13 @@ pub async fn connect(
     Ok(ws)
 }
 
-// simply tie the executor to tokio
 struct TokioExecutor;
-
-impl<Fut> Executor<Fut> for TokioExecutor
+impl<F> Executor<F> for TokioExecutor
 where
-    Fut: Future + Send + 'static,
-    Fut::Output: Send + 'static,
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
 {
-    fn execute(&self, fut: Fut) {
+    fn execute(&self, fut: F) {
         task::spawn(fut);
     }
 }
