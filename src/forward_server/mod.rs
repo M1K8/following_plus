@@ -1,9 +1,4 @@
-use axum::{
-    extract::Query,
-    http::Method,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Query, http::Method, routing::get, Json, Router};
 use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
@@ -32,7 +27,6 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await
     .unwrap();
-
 
     let router = Router::new()
         .route("/", get(base))

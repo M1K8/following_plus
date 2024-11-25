@@ -7,9 +7,9 @@ use tokio::sync::mpsc;
 
 pub mod bsky;
 pub mod common;
+mod forward_server;
 pub mod graph;
 mod server;
-mod forward_server;
 mod ws;
 
 //RUSTFLAGS="-Cprofile-generate=./pgo-data"     cargo build --release --target=x86_64-unknown-linux-gnu
@@ -24,6 +24,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
     let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
 
+    // If env says we need to forward DB requests, just do that & nothing else
+    if !forward_mode.is_empty() {
+        println!("Starting forward web server");
+        forward_server::serve().await.unwrap();
+        println!("Exiting forward web server");
+        return Ok(());
+    }
 
     if !profile.is_empty() {
         let guard = pprof::ProfilerGuardBuilder::default()
@@ -57,14 +64,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap();
     let server_conn = graph.inner();
 
-
-    // If env says we need to forward DB requests, just do that & nothing else
-    if !forward_mode.is_empty() {
-        println!("Starting forward web server");
-        forward_server::serve().await.unwrap();
-        println!("Exiting forward web server");
-        return Ok(())
-    }
     // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
     thread::spawn(move || {
         let web_runtime: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();

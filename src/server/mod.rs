@@ -41,7 +41,7 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
     let state = StateStruct {
         send_chan: chan.clone(),
     };
-  
+
     let router = Router::new()
         .route("/get_feed", get(index))
         .layer(ServiceBuilder::new().layer(cors))
@@ -72,7 +72,6 @@ async fn index(
     println!("user id {}", iss);
     // TODO - Send request to channel to (maybe) prefetch all follow{er}s
     // Then make the read call to the DB ourselves
-
 
     Json(types::Response {
         cursor: Some("123".to_owned()),
