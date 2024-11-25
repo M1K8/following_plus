@@ -9,6 +9,7 @@ pub mod bsky;
 pub mod common;
 pub mod graph;
 mod server;
+mod forward_server;
 mod ws;
 
 //RUSTFLAGS="-Cprofile-generate=./pgo-data"     cargo build --release --target=x86_64-unknown-linux-gnu
@@ -21,14 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let profile = env::var("PROFILE_ENABLE").unwrap_or("".into());
     let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
-    let compress;
+    let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
 
-    if !compression.is_empty() {
-        println!("Compression enabled");
-        compress = true;
-    } else {
-        compress = false;
-    }
 
     if !profile.is_empty() {
         let guard = pprof::ProfilerGuardBuilder::default()
@@ -57,12 +52,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
+    let mut graph = GraphModel::new("bolt://localhost:7687", "user", "pass", recv)
+        .await
+        .unwrap();
+    let server_conn = graph.inner();
 
+
+    // If env says we need to forward DB requests, just do that & nothing else
+    if !forward_mode.is_empty() {
+        println!("Starting forward web server");
+        forward_server::serve(send).await.unwrap();
+        println!("Exiting forward web server");
+        return Ok(())
+    }
     // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
     thread::spawn(move || {
         let web_runtime: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
         println!("Starting web listener thread");
         let wait = web_runtime.spawn(async move {
+            let _ = server_conn;
             server::serve(send).await.unwrap();
         });
         web_runtime.block_on(wait).unwrap();
@@ -72,6 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Connect to the websocket
     let url;
+    let compress = !compression.is_empty();
     if compress {
         url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", "true");
     } else {
@@ -83,10 +92,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Ok(msg) = ws.read_frame().await {
         match msg.opcode {
             fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
-                let pl: bytes::BytesMut;
                 match msg.payload {
-                    fastwebsockets::Payload::Bytes(bytes_mut) => {
-                        pl = bytes_mut;
+                    fastwebsockets::Payload::Bytes(m) => {
+                        match bsky::handle_event_fast(&m, &mut graph, compress).await {
+                            Err(e) => println!("Error handling event: {}", e),
+                            _ => {}
+                        }
                     }
                     _ => {
                         panic!("Unsupported payload type {:?}", msg.payload);

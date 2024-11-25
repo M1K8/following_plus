@@ -11,8 +11,7 @@ use axum_extra::{
 
 use crate::common::FetchMessage;
 use axum_server::tls_rustls::RustlsConfig;
-use neo4rs::Graph;
-use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
@@ -39,15 +38,14 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
     .await
     .unwrap();
 
-    let _state = StateStruct {
+    let state = StateStruct {
         send_chan: chan.clone(),
     };
+  
     let router = Router::new()
-        .route("/", get(base))
-        .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(index))
-        .route("/xrpc/app.bsky.feed.describeFeedGenerator", get(describe))
-        .route("/.well-known/did.json", get(well_known))
-        .layer(ServiceBuilder::new().layer(cors));
+        .route("/get_feed", get(index))
+        .layer(ServiceBuilder::new().layer(cors))
+        .with_state(Arc::new(state));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     axum_server::bind_rustls(addr, config)
@@ -60,6 +58,7 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
 async fn index(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
+    State(_state): State<Arc<StateStruct>>,
 ) -> Json<types::Response> {
     let auth;
     println!("{:?}", params);
@@ -71,10 +70,9 @@ async fn index(
         None => "".into(),
     };
     println!("user id {}", iss);
+    // TODO - Send request to channel to (maybe) prefetch all follow{er}s
+    // Then make the read call to the DB ourselves
 
-    // TODO - Call _the backend_
-    // This'll also be spun out as a separate executable anyway (though we'll still)
-    // need another web server to accept the DB calls - will use Go for that
 
     Json(types::Response {
         cursor: Some("123".to_owned()),
@@ -83,55 +81,4 @@ async fn index(
                 .to_owned(),
         }],
     })
-}
-
-async fn base(
-    Query(_): Query<HashMap<String, String>>,
-    _: Option<TypedHeader<Authorization<Bearer>>>,
-) -> Result<String, ()> {
-    println!("base");
-    Ok("Hello!".into())
-}
-
-// This needs to be exposed on port 443 too
-async fn well_known() -> Result<Json<types::WellKnown>, ()> {
-    println!("e");
-    match env::var("FEEDGEN_SERVICE_DID") {
-        Ok(service_did) => {
-            let hostname = env::var("FEEDGEN_HOSTNAME").unwrap_or("".into());
-            if !service_did.ends_with(hostname.as_str()) {
-                println!("service_did does not end with hostname");
-                return Err(());
-            } else {
-                let known_service = types::KnownService {
-                    id: "#bsky_fg".to_owned(),
-                    r#type: "BskyFeedGenerator".to_owned(),
-                    service_endpoint: format!("https://{}", hostname),
-                };
-                let result = types::WellKnown {
-                    context: vec!["https://www.w3.org/ns/did/v1".into()],
-                    id: service_did,
-                    service: vec![known_service],
-                };
-                return Ok(Json(result));
-            }
-        }
-        Err(_) => {
-            println!("service_did not found");
-            return Err(());
-        }
-    }
-}
-
-async fn describe() -> Result<Json<types::Describe>, ()> {
-    println!("a");
-    let hostname = env::var("FEEDGEN_HOSTNAME").unwrap();
-    let dezscribe = types::Describe {
-        did: format!("did:web:{hostname}"),
-        feeds: vec![types::Feed {
-            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/feed.m1k.sh"),
-        }],
-    };
-
-    Ok(Json(dezscribe))
 }

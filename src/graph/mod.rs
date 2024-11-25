@@ -136,36 +136,6 @@ pub struct GraphModel {
     rm_follow_queue: Vec<HashMap<String, String>>,
     rm_block_queue: Vec<HashMap<String, String>>,
 }
-
-pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4rs::Error> {
-    loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
-        println!("Purging old posts");
-        let _lock = spin.lock().await;
-        let qry = neo4rs::query(queries::PURGE_OLD_POSTS);
-        conn.run(qry).await?;
-        println!("Done!");
-    }
-}
-
-pub async fn listen_channel(
-    write_lock: Arc<Mutex<()>>,
-    conn: Graph,
-    mut recv: mpsc::Receiver<FetchMessage>,
-) -> Result<(), neo4rs::Error> {
-    loop {
-        let did = match recv.recv().await {
-            Some(s) => s,
-            None => continue,
-        };
-
-        println!("Got event for {:?}", did);
-
-        // call getFollowers & getFollowing
-        // then queue them to write to the db - acquire the lock and write
-    }
-}
-
 impl GraphModel {
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, ()> {
         self.purge_spin.lock().await
@@ -353,5 +323,34 @@ fn pluralize(word: &str) -> String {
         return format!("{}i", snip);
     } else {
         return format!("{}s", word);
+    }
+}
+
+pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4rs::Error> {
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
+        println!("Purging old posts");
+        let _lock = spin.lock().await;
+        let qry = neo4rs::query(queries::PURGE_OLD_POSTS);
+        conn.run(qry).await?;
+        println!("Done!");
+    }
+}
+
+pub async fn listen_channel(
+    write_lock: Arc<Mutex<()>>,
+    conn: Graph,
+    mut recv: mpsc::Receiver<FetchMessage>,
+) -> Result<(), neo4rs::Error> {
+    loop {
+        let did = match recv.recv().await {
+            Some(s) => s,
+            None => continue,
+        };
+
+        println!("Got event for {:?}", did);
+
+        // call getFollowers & getFollowing
+        // then queue them to write to the db - acquire the lock and write
     }
 }
