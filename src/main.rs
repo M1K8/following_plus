@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If env says we need to forward DB requests, just do that & nothing else
     if !forward_mode.is_empty() {
         println!("Starting forward web server");
-        forward_server::serve(send).await.unwrap();
+        forward_server::serve().await.unwrap();
         println!("Exiting forward web server");
         return Ok(())
     }

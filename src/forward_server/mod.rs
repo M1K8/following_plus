@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::Query,
     http::Method,
     routing::get,
     Json, Router,
@@ -9,19 +9,14 @@ use axum_extra::{
     TypedHeader,
 };
 
-use crate::common::FetchMessage;
 use axum_server::tls_rustls::RustlsConfig;
 use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf};
-use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 mod auth;
 mod types;
-struct StateStruct {
-    send_chan: Sender<FetchMessage>,
-}
 
-pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -38,9 +33,7 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
     .await
     .unwrap();
 
-    let _state = StateStruct {
-        send_chan: chan.clone(),
-    };
+
     let router = Router::new()
         .route("/", get(base))
         .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(index))
