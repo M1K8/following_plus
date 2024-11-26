@@ -15,8 +15,9 @@ use axum_server::tls_rustls::RustlsConfig;
 use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
+
+use crate::server::types;
 mod auth;
-mod types;
 
 struct StateStruct {
     client: reqwest::Client,
@@ -116,10 +117,7 @@ async fn forward(
     let byt = resp.bytes().await.unwrap();
     println!("Got resp {:?}", byt);
 
-    axum_res
-        .status(status)
-        .body(Body::from(byt))
-        .unwrap()
+    axum_res.status(status).body(Body::from(byt)).unwrap()
 }
 
 async fn base(
