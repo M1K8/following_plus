@@ -66,6 +66,21 @@ pub async fn listen_channel(
             None => continue,
         };
 
+        if msg.did.is_empty() {
+            msg.resp
+            .send(PostResp {
+                posts: vec![PostMsg {
+                    uri:
+                        ""
+                            .to_owned(),
+                    reason: "".to_owned(),
+                }],
+                cursor: Some("EMPTY_DID".to_owned()),
+            })
+            .await
+            .unwrap();
+            continue;
+        }
         println!("Got event for {:?}", msg.did);
 
         if !already_seen.contains(&msg.did) {

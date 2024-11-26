@@ -50,7 +50,7 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
         .layer(ServiceBuilder::new().layer(cors))
         .with_state(Arc::new(state));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 29064));
     axum_server::bind_rustls(addr, config)
         .serve(router.into_make_service())
         .await
