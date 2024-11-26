@@ -270,12 +270,25 @@ pub async fn get_follows(
     did: String,
     client: reqwest::Client,
 ) -> Result<Vec<(String, String)>, reqwest::Error> {
-    let mut url = format!(
+    println!("Getting follows for {:?}", did);
+    let base_url = format!(
         "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.follow&limit=100"
     );
     let mut follows: Vec<(String, String)> = Vec::new();
-    let mut req = client.get(&url).build()?;
-    let mut resp: FollowsResp = client.execute(req).await?.json().await?;
+    let mut req = match client.get(&base_url).build() {
+        Ok(r) => r,
+        Err(e) => {
+            println!("req {:?}", e);
+            return Err(e);
+        }
+    };
+    let mut resp: FollowsResp = match client.execute(req).await?.json().await {
+        Ok(r) => r,
+        Err(e) => {
+            println!("resp {:?}", e);
+            return Err(e);
+        }
+    };
 
     loop {
         for f in &mut resp.records {
@@ -285,9 +298,20 @@ pub async fn get_follows(
         }
         match &resp.cursor {
             Some(c) => {
-                url = url + format!("&cursor={}", c).as_str();
+                println!("Processing {:?}", c);
+                let url = base_url.clone() + format!("&cursor={}", c).as_str();
                 req = client.get(&url).build()?;
-                resp = client.execute(req).await?.json().await?;
+                let r = match client.execute(req).await {
+                    Ok(r) => r,
+                    Err(e) => panic!("{:?}", e),
+                };
+                resp = match r.json().await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        println!("{:?}", e);
+                        break;
+                    }
+                };
             }
             None => {
                 break;

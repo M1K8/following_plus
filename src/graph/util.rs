@@ -5,10 +5,7 @@ use std::{
 };
 
 use neo4rs::Graph;
-use tokio::{
-    sync::{mpsc, Mutex},
-    task,
-};
+use tokio::sync::{mpsc, Mutex};
 
 use crate::{
     bsky,
@@ -100,11 +97,10 @@ pub async fn listen_channel(
                 })
                 .collect();
             let follow_chunks = follow_chunks.chunks(60).collect::<Vec<_>>();
-
+            println!("Processing {:?}", follows.len());
             for follow_chunk in follow_chunks {
                 let qry = neo4rs::query(queries::ADD_FOLLOW).param("follows", follow_chunk);
                 let l = write_lock.lock().await;
-
                 match conn.run(qry).await {
                     Ok(_) => {}
                     Err(e) => {
@@ -115,22 +111,23 @@ pub async fn listen_channel(
                 drop(l);
             }
 
-            msg.resp
-                .send(PostResp {
-                    posts: vec![PostMsg {
-                        uri:
-                            "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
-                                .to_owned(),
-                        reason: "".to_owned(),
-                    }],
-                    cursor: Some("1".to_owned()),
-                })
-                .await
-                .unwrap();
-
             println!("Written {} follows for {}", follows.len(), &msg.did);
+            already_seen.insert(msg.did.clone());
         }
 
-        already_seen.insert(msg.did.clone());
+        // TODO - Decide what posts to return
+        // by calling one or more queries on conn & normalising / sorting the results
+
+        msg.resp
+            .send(PostResp {
+                posts: vec![PostMsg {
+                    uri: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
+                        .to_owned(),
+                    reason: "".to_owned(),
+                }],
+                cursor: None,
+            })
+            .await
+            .unwrap();
     }
 }

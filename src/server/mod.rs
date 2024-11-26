@@ -10,7 +10,7 @@ use axum_extra::{
     TypedHeader,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use hyper::StatusCode;
+use hyper::{HeaderMap, StatusCode};
 use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
@@ -59,18 +59,21 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
 }
 
 async fn index(
-    Query(params): Query<HashMap<String, String>>,
+    _headers: HeaderMap,
+    Query(_params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
     State(state): State<Arc<StateStruct>>,
 ) -> Result<Json<types::Response>, axum::http::StatusCode> {
-    println!("{:?}", params);
     let iss = match bearer {
         Some(s) => {
             let s = decode(s.0 .0.token()).unwrap().into_owned();
-            println!("{s}");
             auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
-        None => "".into(),
+        None => {
+            println!("No Header!");
+            println!("No Header!");
+            "".into()
+        }
     };
     println!("user id {}", iss);
     //
@@ -98,7 +101,10 @@ async fn index(
 
     let resp = match resp {
         Some(r) => r,
-        None => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        None => {
+            println!("nil response from channel");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     };
 
     let posts: Vec<types::Post> = resp.posts.iter().map(|p| p.into()).collect();

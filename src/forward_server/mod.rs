@@ -39,12 +39,13 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
     .await
     .unwrap();
 
-    let cl = reqwest::ClientBuilder::new().connect_timeout(Duration::from_secs(5)).danger_accept_invalid_certs(true).build().unwrap();
+    let cl = reqwest::ClientBuilder::new()
+        .connect_timeout(Duration::from_secs(5))
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
 
-    let state = Arc::new(StateStruct {
-        client: cl,
-        edpt,
-    });
+    let state = Arc::new(StateStruct { client: cl, edpt });
 
     let router = Router::new()
         .route("/", get(base))
@@ -63,7 +64,7 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn forward(
-    Query(params): Query<HashMap<String, String>>,
+    Query(_params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
     State(state): axum::extract::State<Arc<StateStruct>>,
 ) -> Response<Body> {
@@ -79,16 +80,20 @@ async fn forward(
                 .unwrap();
         }
     };
-    println!("user id {}", iss);
+    println!("Forwarding for user id {}", iss);
     let tok = bearer.unwrap();
-    let tok = tok.0.0.token();
-    println!("token {}", tok);
+    let tok = tok.0 .0.token();
+
+    // TODO - Have caching here; we will return ~ 120 posts at a time, so thats ~ 4 pages (30 are requested at a time)
+    // So use the cursor.
+
+    // Cursor will have 2 components; upstream:downstream. Downstream will be used for paging on this end
+    // While the downstream token will be used as a timestamp based cursor for upstream.
 
     let resp = match state
         .client
         .request(reqwest::Method::GET, state.edpt.as_str())
         .bearer_auth(tok)
-        .query(&params)
         .send()
         .await
     {
