@@ -1,3 +1,4 @@
+use crate::common::FetchMessage;
 use axum::{
     extract::{Query, State},
     http::Method,
@@ -8,14 +9,13 @@ use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
-use hyper::StatusCode;
-
-use crate::common::FetchMessage;
 use axum_server::tls_rustls::RustlsConfig;
+use hyper::StatusCode;
 use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
+use urlencoding::decode;
 mod auth;
 pub mod types;
 struct StateStruct {
@@ -65,7 +65,11 @@ async fn index(
 ) -> Result<Json<types::Response>, axum::http::StatusCode> {
     println!("{:?}", params);
     let iss = match bearer {
-        Some(s) => auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned()).unwrap(),
+        Some(s) => {
+            let s = decode(s.0 .0.token()).unwrap().into_owned();
+            println!("{s}");
+            auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
+        }
         None => "".into(),
     };
     println!("user id {}", iss);

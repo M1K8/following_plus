@@ -78,18 +78,21 @@ async fn forward(
         }
     };
     println!("user id {}", iss);
+    let tok = bearer.unwrap();
+    let tok = tok.0.0.token();
+    println!("token {}", tok);
 
     let resp = match state
         .client
         .request(reqwest::Method::GET, state.edpt.as_str())
-        .bearer_auth(bearer.unwrap().0 .0.token())
+        .bearer_auth(tok)
         .query(&params)
         .send()
         .await
     {
         Ok(r) => r,
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {}", e.status().unwrap());
             return Response::builder()
                 .status(403)
                 .body(Body::from(e.to_string()))
@@ -103,14 +106,6 @@ async fn forward(
         .status(&resp.status())
         .body(Body::from(resp.bytes().await.unwrap()))
         .unwrap()
-
-    // Json(types::Response {
-    //     cursor: Some("123".to_owned()),
-    //     feed: vec![types::Post {
-    //         post: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
-    //             .to_owned(),
-    //     }],
-    // })
 }
 
 async fn base(

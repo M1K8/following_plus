@@ -31,3 +31,4 @@ tokio-rustls = "0.26.0"
 rustls = { version = "0.23.18", features = ["ring"] }
 bytes = "1.8.0"
 axum-server = { version = "0.7", features = ["tls-rustls"] }
+urlencoding = "2.1.3"
