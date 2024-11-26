@@ -112,11 +112,13 @@ async fn forward(
     let mut axum_res = Response::builder();
     *axum_res.headers_mut().unwrap() = resp.headers().clone();
 
-    println!("Got resp {:?}", resp);
+    let status = resp.status().clone();
+    let byt = resp.bytes().await.unwrap();
+    println!("Got resp {:?}", byt);
 
     axum_res
-        .status(&resp.status())
-        .body(Body::from(resp.bytes().await.unwrap()))
+        .status(status)
+        .body(Body::from(byt))
         .unwrap()
 }
 
