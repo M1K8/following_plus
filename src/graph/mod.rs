@@ -4,10 +4,10 @@ use std::{collections::HashMap, mem, time::Instant};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::common::FetchMessage;
-mod queries;
+pub mod queries;
+mod util;
 
 const Q_LIMIT: usize = 70;
-const PURGE_TIME: u64 = 45 * 60;
 
 macro_rules! add_to_queue {
     ($query_name:expr, $self:ident, $( $arg:ident ),+) => {{
@@ -20,7 +20,7 @@ macro_rules! add_to_queue {
             "like" =>   (&mut $self.like_queue,queries::ADD_LIKE),
             _ => panic!("unknown query name")
         };
-        // Helper to build the argument map with variable names as keys
+        // HashMap-ify the input params w/ the same name as defined in Ruat
         let mut params = HashMap::<String, String>::new();
         $(
             params.insert(stringify!($arg).to_string(), $arg);
@@ -28,14 +28,14 @@ macro_rules! add_to_queue {
 
         // Check if the queue is full
         if queue.0.len() >= Q_LIMIT {
-            let _lock = $self.purge_spin.lock().await;
+            let lock = $self.write_lock.lock().await;
             queue.0.push(params);
 
             let n = Instant::now();
 
             // Move queue values without copying
             let q = mem::take(queue.0);
-            let qry = neo4rs::query(queue.1).param(&pluralize($query_name), q);
+            let qry = neo4rs::query(queue.1).param(&util::pluralize($query_name), q);
             match  $self.inner.run(qry).await{
                 Ok(_) => {},
                 Err(e) => {
@@ -43,7 +43,7 @@ macro_rules! add_to_queue {
                     return Err(e);
                 }
             };
-            drop(_lock);
+            drop(lock);
 
             let el = n.elapsed().as_millis();
             if el > 3 {
@@ -81,8 +81,8 @@ macro_rules! remove_from_queue {
         )*
 
         // Check if the queue is full
-        if queue.0.len() >= (Q_LIMIT / 5) { //rarer
-            let _lock = $self.purge_spin.lock().await;
+        if queue.0.len() >= (Q_LIMIT / 2) { //rarer
+            let lock = $self.write_lock.lock().await;
             queue.0.push(params);
 
             let n = Instant::now();
@@ -90,7 +90,7 @@ macro_rules! remove_from_queue {
 
             // Move queue values without copying
             let q = mem::take(queue.0);
-            let qry = neo4rs::query(queue.1).param(&pluralize($query_name), q);
+            let qry = neo4rs::query(queue.1).param(&util::pluralize($query_name), q);
             match  $self.inner.run(qry).await{
                 Ok(_) => {},
                 Err(e) => {
@@ -98,7 +98,7 @@ macro_rules! remove_from_queue {
                     return Err(e);
                 }
             };
-            drop(_lock);
+            drop(lock);
 
             let el = n.elapsed().as_millis();
             if el > 3 {
@@ -121,7 +121,7 @@ macro_rules! remove_from_queue {
 
 pub struct GraphModel {
     inner: Graph,
-    purge_spin: Arc<Mutex<()>>,
+    write_lock: Arc<Mutex<()>>,
     like_queue: Vec<HashMap<String, String>>,
     post_queue: Vec<HashMap<String, String>>,
     reply_queue: Vec<HashMap<String, String>>,
@@ -138,7 +138,7 @@ pub struct GraphModel {
 }
 impl GraphModel {
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, ()> {
-        self.purge_spin.lock().await
+        self.write_lock.lock().await
     }
 
     pub fn inner(&self) -> Graph {
@@ -153,6 +153,7 @@ impl GraphModel {
     ) -> Result<Self, neo4rs::Error> {
         let cfg = ConfigBuilder::new()
             .uri(uri)
+            .fetch_size(1024)
             .user(user)
             .password(pass)
             .db("memgraph")
@@ -166,24 +167,24 @@ impl GraphModel {
             .await?;
 
         // Set off background job to do whatever cleaning we want
-        let purge_spin = Arc::new(Mutex::new(()));
-        let write_lock = purge_spin.clone();
-        let inner_conn = inner.clone();
+        let write_lock = Arc::new(Mutex::new(()));
+        let write_lock_purge = write_lock.clone();
+        let conn_purge: Graph = inner.clone();
 
         // We also want a task to listen for first time user requests
         // As we want to fetch all followers & follows
-        let write_lock2 = purge_spin.clone();
-        let inner_conn2 = inner.clone();
+        let write_lock_new_user = write_lock.clone();
+        let conn_new_user = inner.clone();
 
         tokio::spawn(async move {
-            match kickoff_purge(write_lock, inner_conn).await {
+            match util::kickoff_purge(write_lock_purge, conn_purge).await {
                 Ok(_) => {}
-                Err(e) => panic!("Error purging old posts, aborting: {}", e),
+                Err(e) => println!("Error purging old posts: {}", e),
             };
         });
 
         tokio::spawn(async move {
-            match listen_channel(write_lock2, inner_conn2, recv).await {
+            match util::listen_channel(write_lock_new_user, conn_new_user, recv).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };
@@ -191,7 +192,7 @@ impl GraphModel {
 
         let res = Self {
             inner,
-            purge_spin,
+            write_lock,
             like_queue: Default::default(),
             post_queue: Default::default(),
             follow_queue: Default::default(),
@@ -302,55 +303,5 @@ impl GraphModel {
 
     pub async fn rm_reply(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
         remove_from_queue!("reply", self, did, rkey)
-    }
-}
-
-pub fn get_post_uri(did: String, rkey: String) -> String {
-    format!("at://{did}/app.bsky.feed.post/{rkey}")
-}
-fn pluralize(word: &str) -> String {
-    let word_len = word.len();
-    let snip = &word[..word_len - 1];
-    let last_char = word.chars().nth(word_len - 1).unwrap();
-
-    if last_char == 'y' || word.ends_with("ay") {
-        return format!("{}ies", snip);
-    } else if last_char == 's' || last_char == 'x' || last_char == 'z' {
-        return format!("{}es", word);
-    } else if last_char == 'o' && word.ends_with("o") && !word.ends_with("oo") {
-        return format!("{}oes", snip);
-    } else if last_char == 'u' && word.ends_with("u") {
-        return format!("{}i", snip);
-    } else {
-        return format!("{}s", word);
-    }
-}
-
-pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4rs::Error> {
-    loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
-        println!("Purging old posts");
-        let _lock = spin.lock().await;
-        let qry = neo4rs::query(queries::PURGE_OLD_POSTS);
-        conn.run(qry).await?;
-        println!("Done!");
-    }
-}
-
-pub async fn listen_channel(
-    write_lock: Arc<Mutex<()>>,
-    conn: Graph,
-    mut recv: mpsc::Receiver<FetchMessage>,
-) -> Result<(), neo4rs::Error> {
-    loop {
-        let did = match recv.recv().await {
-            Some(s) => s,
-            None => continue,
-        };
-
-        println!("Got event for {:?}", did);
-
-        // call getFollowers & getFollowing
-        // then queue them to write to the db - acquire the lock and write
     }
 }

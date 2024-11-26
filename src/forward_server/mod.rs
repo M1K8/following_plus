@@ -1,17 +1,28 @@
-use axum::{extract::Query, http::Method, routing::get, Json, Router};
+use axum::{
+    body::Body,
+    extract::{Query, State},
+    http::Method,
+    response::Response,
+    routing::get,
+    Json, Router,
+};
 use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
 
 use axum_server::tls_rustls::RustlsConfig;
-use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf};
+use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 mod auth;
 mod types;
 
-pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
+struct StateStruct {
+    client: reqwest::Client,
+    edpt: String,
+}
+pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -28,12 +39,18 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     .await
     .unwrap();
 
+    let state = Arc::new(StateStruct {
+        client: reqwest::Client::new(),
+        edpt,
+    });
+
     let router = Router::new()
         .route("/", get(base))
-        .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(index))
+        .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(forward))
         .route("/xrpc/app.bsky.feed.describeFeedGenerator", get(describe))
         .route("/.well-known/did.json", get(well_known))
-        .layer(ServiceBuilder::new().layer(cors));
+        .layer(ServiceBuilder::new().layer(cors))
+        .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     axum_server::bind_rustls(addr, config)
@@ -43,28 +60,57 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn index(
+async fn forward(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
-) -> Json<types::Response> {
-    let iss = match bearer {
-        Some(s) => auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned()).unwrap(),
-        None => "".into(),
+    State(state): axum::extract::State<Arc<StateStruct>>,
+) -> Response<Body> {
+    let iss;
+    match &bearer {
+        Some(s) => {
+            iss = auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned()).unwrap();
+        }
+        None => {
+            return Response::builder()
+                .status(401)
+                .body(Body::from("unauthorized"))
+                .unwrap();
+        }
     };
     println!("user id {}", iss);
-    let _params = params;
 
-    // TODO - Call _the backend_
-    // This'll also be spun out as a separate executable anyway (though we'll still)
-    // need another web server to accept the DB calls - will use Go for that
+    let resp = match state
+        .client
+        .request(reqwest::Method::GET, state.edpt.as_str())
+        .bearer_auth(bearer.unwrap().0 .0.token())
+        .query(&params)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            println!("Error: {}", e);
+            return Response::builder()
+                .status(403)
+                .body(Body::from(e.to_string()))
+                .unwrap();
+        }
+    };
+    let mut axum_res = Response::builder();
+    *axum_res.headers_mut().unwrap() = resp.headers().clone();
 
-    Json(types::Response {
-        cursor: Some("123".to_owned()),
-        feed: vec![types::Post {
-            post: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
-                .to_owned(),
-        }],
-    })
+    axum_res
+        .status(&resp.status())
+        .body(Body::from(resp.bytes().await.unwrap()))
+        .unwrap()
+
+    // Json(types::Response {
+    //     cursor: Some("123".to_owned()),
+    //     feed: vec![types::Post {
+    //         post: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
+    //             .to_owned(),
+    //     }],
+    // })
 }
 
 async fn base(
@@ -74,7 +120,6 @@ async fn base(
     Ok("Hello!".into())
 }
 
-// This needs to be exposed on port 443 too
 async fn well_known() -> Result<Json<types::WellKnown>, ()> {
     match env::var("FEEDGEN_SERVICE_DID") {
         Ok(service_did) => {
@@ -108,7 +153,7 @@ async fn describe() -> Result<Json<types::Describe>, ()> {
     let dezscribe = types::Describe {
         did: format!("did:web:{hostname}"),
         feeds: vec![types::Feed {
-            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/feed.m1k.sh"),
+            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/following_plus"),
         }],
     };
 

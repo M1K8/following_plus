@@ -20,19 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    let profile = env::var("PROFILE_ENABLE").unwrap_or("".into());
-    let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
-    let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
-
-    // If env says we need to forward DB requests, just do that & nothing else
-    if !forward_mode.is_empty() {
-        println!("Starting forward web server");
-        forward_server::serve().await.unwrap();
-        println!("Exiting forward web server");
-        return Ok(());
-    }
-
-    if !profile.is_empty() {
+    if !env::var("PROFILE_ENABLE").unwrap_or("".into()).is_empty() {
         let guard = pprof::ProfilerGuardBuilder::default()
             .frequency(1000)
             .blocklist(&["libc", "libgcc", "pthread", "vdso"])
@@ -56,6 +44,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             process::exit(0x0100);
         })
         .expect("Error setting Ctrl-C handler");
+    }
+
+    let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
+    let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
+
+    // If env says we need to forward DB requests, just do that & nothing else
+    if !forward_mode.is_empty() {
+        println!("Starting forward web server");
+        forward_server::serve(forward_mode).await.unwrap();
+        println!("Exiting forward web server");
+        return Ok(());
     }
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);

@@ -3,6 +3,7 @@ use crate::graph::GraphModel;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
+use std::io::Read;
 use std::mem;
 use zstd::bulk::Decompressor;
 mod types;
@@ -66,7 +67,7 @@ pub async fn handle_event_fast(
     let rkey = commit.rkey.clone();
 
     let drift = (Utc::now().naive_utc().and_utc().timestamp_micros() - deser_evt.time_us) / 1000;
-    if drift > 30000 {
+    if drift > 35000 {
         panic!("{drift}ms late (probably need to speed up ingest)!!!");
     }
     //println!("{drift} ms");
@@ -263,54 +264,24 @@ fn get_rkey(commit: &Commit) -> String {
     rkey_out
 }
 
-pub async fn get_followers(
-    did: String,
-    client: &reqwest::Client,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut url = format!(
-        "https://public.api.bsky.app/xrpc/app.bsky.graph.getFollowers?limit=100&actor={}",
-        did
-    );
-    let mut followers: Vec<String> = Vec::new();
-    let mut req = client.get(&url).build()?;
-    let mut resp: FollowersResp = client.execute(req).await?.json().await?;
-
-    loop {
-        for f in &mut resp.followers {
-            let str = mem::take(&mut f.did); // yoink the string, not gonna need it anymore in the vec anyway
-            followers.push(str);
-        }
-        match &resp.cursor {
-            Some(c) => {
-                url = url + format!("&cursor={}", c).as_str();
-                req = client.get(&url).build()?;
-                resp = client.execute(req).await?.json().await?;
-            }
-            None => {
-                break;
-            }
-        }
-    }
-
-    Ok(followers)
-}
-
+////// https://bsky.social/xrpc/com.atproto.repo.listRecords?repo=did:plc:xq3lwzdpijivr5buiizezlni&collection=app.bsky.graph.follow
+/// use this - doesnt
 pub async fn get_follows(
     did: String,
-    client: &reqwest::Client,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    client: reqwest::Client,
+) -> Result<Vec<(String, String)>, reqwest::Error> {
     let mut url = format!(
-        "https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows?limit=100&actor={}",
-        did
+        "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.follow&limit=100"
     );
-    let mut follows: Vec<String> = Vec::new();
+    let mut follows: Vec<(String, String)> = Vec::new();
     let mut req = client.get(&url).build()?;
     let mut resp: FollowsResp = client.execute(req).await?.json().await?;
 
     loop {
-        for f in &mut resp.follows {
-            let str = mem::take(&mut f.did); // yoink the string, not gonna need it anymore in the vec anyway
-            follows.push(str);
+        for f in &mut resp.records {
+            let subject = mem::take(&mut f.value.subject); // yoink the string, not gonna need it anymore in the vec anyway
+            let rkey = parse_rkey(&f.uri);
+            follows.push((subject, rkey));
         }
         match &resp.cursor {
             Some(c) => {
