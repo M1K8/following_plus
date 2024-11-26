@@ -3,7 +3,6 @@ use crate::graph::GraphModel;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
-use std::io::Read;
 use std::mem;
 use zstd::bulk::Decompressor;
 mod types;
