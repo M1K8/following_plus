@@ -12,7 +12,7 @@ use axum_extra::{
 };
 
 use axum_server::tls_rustls::RustlsConfig;
-use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 mod auth;
@@ -39,8 +39,10 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
     .await
     .unwrap();
 
+    let cl = reqwest::ClientBuilder::new().connect_timeout(Duration::from_secs(5)).danger_accept_invalid_certs(true).build().unwrap();
+
     let state = Arc::new(StateStruct {
-        client: reqwest::Client::new(),
+        client: cl,
         edpt,
     });
 
@@ -92,7 +94,10 @@ async fn forward(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("Error: {}", e.status().unwrap());
+            println!("builder err: {}", e.is_builder());
+            println!("body err: {}", e.is_body());
+            println!("req: {}", e.is_request());
+            println!("Error: {}", e.to_string());
             return Response::builder()
                 .status(403)
                 .body(Body::from(e.to_string()))
