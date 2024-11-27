@@ -58,6 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
+    // todo - password - rooter
+    // usr - MEMGRAPH_USERNAME="bskyting" 
     let mut graph = GraphModel::new("bolt://localhost:7687", "user", "pass", recv)
         .await
         .unwrap();
@@ -77,13 +79,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
 
     // Connect to the websocket
-    let url;
-    let compress = !compression.is_empty();
-    if compress {
-        url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", "true");
-    } else {
-        url =  format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", "false");
-    }
+    let compressed = !compression.is_empty();
+    let url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url).await?;
     println!("Connected to Bluesky firehose");
 
@@ -92,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
                 match msg.payload {
                     fastwebsockets::Payload::Bytes(m) => {
-                        match bsky::handle_event_fast(&m, &mut graph, compress).await {
+                        match bsky::handle_event_fast(&m, &mut graph, compressed).await {
                             Err(e) => println!("Error handling event: {}", e),
                             _ => {}
                         }

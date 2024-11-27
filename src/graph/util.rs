@@ -97,7 +97,6 @@ pub async fn listen_channel(
                 })
                 .collect();
             let follow_chunks = follow_chunks.chunks(60).collect::<Vec<_>>();
-            println!("Processing {:?}", follows.len());
             for follow_chunk in follow_chunks {
                 let qry = neo4rs::query(queries::ADD_FOLLOW).param("follows", follow_chunk);
                 let l = write_lock.lock().await;
@@ -117,6 +116,10 @@ pub async fn listen_channel(
 
         // TODO - Decide what posts to return
         // by calling one or more queries on conn & normalising / sorting the results
+
+
+        // TODO - Maybe queue a job to fetch 2nd degree follows? Might be a bit heavy
+        
 
         msg.resp
             .send(PostResp {
