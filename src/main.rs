@@ -49,8 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
 
     // todo - this properly
-    let user = env::var("MM_USER").unwrap_or("".into());
-    let pw = env::var("MM_PW").unwrap_or("".into());
+    let user = env::var("MM_USER").unwrap_or("user".into());
+    let pw = env::var("MM_PW").unwrap_or("pass".into());
 
     // If env says we need to forward DB requests, just do that & nothing else
     if !forward_mode.is_empty() {

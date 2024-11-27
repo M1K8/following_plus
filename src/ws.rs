@@ -29,11 +29,12 @@ pub async fn connect(
     let mut tls_store = RootCertStore::empty();
     let tls_cert = CertificateDer::from_pem_file(DEFAULT_CERT)?;
     tls_store.add(tls_cert)?;
+    println!("1");
 
     // create tcp conn to server
     let addr = format!("{}:443", domain);
     let tcp_stream = TcpStream::connect(&addr).await?;
-
+    println!("2");
     // tls encrypt the tcp stream
     let tls_config = ClientConfig::builder()
         .with_root_certificates(tls_store)
@@ -41,6 +42,7 @@ pub async fn connect(
     let connector = TlsConnector::from(Arc::new(tls_config));
     let tls_domain = ServerName::try_from(String::from(domain))?;
     let tls_stream = connector.connect(tls_domain, tcp_stream).await?;
+    println!("3");
 
     let req_builder = Request::builder()
         .method("GET")
@@ -53,6 +55,7 @@ pub async fn connect(
         .body(String::new());
     let req = req_builder?;
     let (ws, _) = handshake::client(&TokioExecutor, req, tls_stream).await?;
+    println!("4");
 
     Ok(ws)
 }
