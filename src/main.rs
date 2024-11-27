@@ -49,6 +49,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
     let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
 
+    // todo - this properly
+    let user = env::var("MM_USER").unwrap_or("".into());
+    let pw = env::var("MM_PW").unwrap_or("".into());
+
     // If env says we need to forward DB requests, just do that & nothing else
     if !forward_mode.is_empty() {
         println!("Starting forward web server");
@@ -60,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
     // todo - password - rooter
     // usr - MEMGRAPH_USERNAME="bskyting" 
-    let mut graph = GraphModel::new("bolt://localhost:7687", "user", "pass", recv)
+    let mut graph = GraphModel::new("bolt://localhost:7687", &user, &pw, recv)
         .await
         .unwrap();
     let server_conn = graph.inner();
