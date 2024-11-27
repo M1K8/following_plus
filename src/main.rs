@@ -19,7 +19,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
-
     if !env::var("PROFILE_ENABLE").unwrap_or("".into()).is_empty() {
         let guard = pprof::ProfilerGuardBuilder::default()
             .frequency(1000)
@@ -64,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
     // todo - password - rooter
     // usr - MEMGRAPH_USERNAME="bskyting" 
-    let mut graph = GraphModel::new("bolt://localhost:7687", &user, &pw, recv)
+    let mut graph = GraphModel::new("bolt://memgraph:7687", &user, &pw, recv)
         .await
         .unwrap();
     let server_conn = graph.inner();
