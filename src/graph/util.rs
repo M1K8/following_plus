@@ -80,38 +80,80 @@ pub async fn listen_channel(
         println!("Got event for {:?}", msg.did);
 
         if !already_seen.contains(&msg.did) {
-            let did_follows = msg.did.clone();
-            let cl_follows = client.clone();
-            let follows = match bsky::get_follows(did_follows, cl_follows).await {
-                Ok(f) => f,
-                Err(e) => return Err(neo4rs::Error::UnexpectedMessage(e.to_string())),
-            };
-
-            let follow_chunks: Vec<HashMap<String, String>> = follows
-                .iter()
-                .map(|vals| {
-                    HashMap::from([
-                        ("out".to_owned(), vals.0.clone()),
-                        ("did".to_owned(), msg.did.clone()),
-                        ("rkey".to_owned(), vals.1.clone()),
-                    ])
-                })
-                .collect();
-            let follow_chunks = follow_chunks.chunks(60).collect::<Vec<_>>();
-            for follow_chunk in follow_chunks {
-                let qry = neo4rs::query(queries::ADD_FOLLOW).param("follows", follow_chunk);
-                let l = write_lock.lock().await;
-                match conn.run(qry).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        println!("Error on backfilling follows for {}", &msg.did);
-                        return Err(e);
-                    }
+            // Follows
+            {
+                let did_follows = msg.did.clone();
+                let cl_follows = client.clone();
+                let follows = match bsky::get_follows(did_follows, cl_follows).await {
+                    Ok(f) => f,
+                    Err(e) => return Err(neo4rs::Error::UnexpectedMessage(e.to_string())),
                 };
-                drop(l);
+
+                let follow_chunks: Vec<HashMap<String, String>> = follows
+                    .iter()
+                    .map(|vals| {
+                        HashMap::from([
+                            ("out".to_owned(), vals.0.clone()),
+                            ("did".to_owned(), msg.did.clone()),
+                            ("rkey".to_owned(), vals.1.clone()),
+                        ])
+                    })
+                    .collect();
+                let follow_chunks = follow_chunks.chunks(60).collect::<Vec<_>>();
+                for follow_chunk in follow_chunks {
+                    let qry = neo4rs::query(queries::ADD_FOLLOW).param("follows", follow_chunk);
+                    let l = write_lock.lock().await;
+                    match conn.run(qry).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            println!("Error on backfilling follows for {}", &msg.did);
+                            return Err(e);
+                        }
+                    };
+                    drop(l);
+                }
+
+                println!("Written {} follows for {}", follows.len(), &msg.did);
             }
 
-            println!("Written {} follows for {}", follows.len(), &msg.did);
+            //
+
+            // Blocks
+            {
+                let did_blocks = msg.did.clone();
+                let cl_blocks = client.clone();
+                let blocks = match bsky::get_blocks(did_blocks, cl_blocks).await {
+                    Ok(f) => f,
+                    Err(e) => return Err(neo4rs::Error::UnexpectedMessage(e.to_string())),
+                };
+
+                let block_chunks: Vec<HashMap<String, String>> = blocks
+                    .iter()
+                    .map(|vals| {
+                        HashMap::from([
+                            ("out".to_owned(), vals.0.clone()),
+                            ("did".to_owned(), msg.did.clone()),
+                            ("rkey".to_owned(), vals.1.clone()),
+                        ])
+                    })
+                    .collect();
+                let block_chunks = block_chunks.chunks(60).collect::<Vec<_>>();
+                for block_chunk in block_chunks {
+                    let qry = neo4rs::query(queries::ADD_BLOCK).param("blocks", block_chunk);
+                    let l = write_lock.lock().await;
+                    match conn.run(qry).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            println!("Error on backfilling blocks for {}", &msg.did);
+                            return Err(e);
+                        }
+                    };
+                    drop(l);
+                }
+
+                println!("Written {} blocks for {}", blocks.len(), &msg.did);
+            }
+            //
             already_seen.insert(msg.did.clone());
         }
 

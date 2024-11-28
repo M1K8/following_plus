@@ -264,7 +264,6 @@ fn get_rkey(commit: &Commit) -> String {
 }
 
 ////// https://bsky.social/xrpc/com.atproto.repo.listRecords?repo=did:plc:xq3lwzdpijivr5buiizezlni&collection=app.bsky.graph.follow
-/// TODO - Blocks
 pub async fn get_follows(
     did: String,
     client: reqwest::Client,
@@ -319,4 +318,60 @@ pub async fn get_follows(
     }
 
     Ok(follows)
+}
+
+pub async fn get_blocks(
+    did: String,
+    client: reqwest::Client,
+) -> Result<Vec<(String, String)>, reqwest::Error> {
+    println!("Getting blocks for {:?}", did);
+    let base_url = format!(
+        "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.block&limit=100"
+    );
+    let mut blocks: Vec<(String, String)> = Vec::new();
+    let mut req = match client.get(&base_url).build() {
+        Ok(r) => r,
+        Err(e) => {
+            println!("req {:?}", e);
+            return Err(e);
+        }
+    };
+    let mut resp: FollowsResp = match client.execute(req).await?.json().await {
+        Ok(r) => r,
+        Err(e) => {
+            println!("resp {:?}", e);
+            return Err(e);
+        }
+    };
+
+    loop {
+        for f in &mut resp.records {
+            let subject = mem::take(&mut f.value.subject); // yoink the string, not gonna need it anymore in the vec anyway
+            let rkey = parse_rkey(&f.uri);
+            blocks.push((subject, rkey));
+        }
+        match &resp.cursor {
+            Some(c) => {
+                println!("Processing {:?}", c);
+                let url = base_url.clone() + format!("&cursor={}", c).as_str();
+                req = client.get(&url).build()?;
+                let r = match client.execute(req).await {
+                    Ok(r) => r,
+                    Err(e) => panic!("{:?}", e),
+                };
+                resp = match r.json().await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        println!("{:?}", e);
+                        break;
+                    }
+                };
+            }
+            None => {
+                break;
+            }
+        }
+    }
+
+    Ok(blocks)
 }
