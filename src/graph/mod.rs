@@ -7,7 +7,7 @@ use crate::common::FetchMessage;
 pub mod queries;
 mod util;
 
-const Q_LIMIT: usize = 68;
+const Q_LIMIT: usize = 65;
 
 macro_rules! add_to_queue {
     ($query_name:expr, $self:ident, $( $arg:ident ),+) => {{
