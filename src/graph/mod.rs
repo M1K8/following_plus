@@ -185,6 +185,9 @@ impl GraphModel {
         inner
             .run(neo4rs::query("CREATE INDEX ON :Post(rkey)"))
             .await?;
+        inner
+            .run(neo4rs::query("CREATE EDGE INDEX ON :FOLLOWS(rkey)"))
+            .await?;
 
         // Set off background job to do whatever cleaning we want
         let write_lock = Arc::new(Mutex::new(()));
