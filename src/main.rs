@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
-    println!("Connected to memgraph");
+    println!("Connecting to memgraph");
     let mut graph = GraphModel::new("bolt://localhost:7687", &user, &pw, recv)
         .await
         .unwrap();
