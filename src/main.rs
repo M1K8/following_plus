@@ -85,8 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Connecting to Bluesky firehose");
     let compressed = !compression.is_empty();
     let url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
-    println!("{url}");
-    let mut ws = ws::connect("jetstream1.us-east.bsky.network", url).await?;
+    let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     println!("Connected to Bluesky firehose");
 
     while let Ok(msg) = ws.read_frame().await {
@@ -105,8 +104,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
             }
             fastwebsockets::OpCode::Close => {
-                println!("Closing connection");
-                break;
+                println!("Closing connection, trying to reopen...");
+                ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
+                continue;
             }
             _ => {}
         }
