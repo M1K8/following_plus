@@ -280,9 +280,6 @@ impl GraphModel {
         out: String,
         rkey: String,
     ) -> Result<bool, neo4rs::Error> {
-        if did == "did:plc:bsaboe3fhue4d3yyz5pziaed" {
-            println!("Adding follow rkey {rkey} for {out}")
-        }
         add_to_queue!("follow", self, out, rkey, did)
     }
 
@@ -313,9 +310,6 @@ impl GraphModel {
     }
 
     pub async fn rm_follow(&mut self, did: String, rkey: String) -> Result<bool, neo4rs::Error> {
-        if did == "did:plc:bsaboe3fhue4d3yyz5pziaed" {
-            println!("Removing follow rkey {rkey}")
-        }
         remove_from_queue!("follow", self, did, rkey)
     }
 
