@@ -276,8 +276,8 @@ impl GraphModel {
 
     pub async fn add_follow(
         &mut self,
-        out: String,
         did: String,
+        out: String,
         rkey: String,
     ) -> Result<bool, neo4rs::Error> {
         if out == "did:plc:bsaboe3fhue4d3yyz5pziaed" {

@@ -157,10 +157,10 @@ pub async fn handle_event_fast(
             }
 
             "app.bsky.graph.follow" => {
-                let mut did_in = String::new();
+                let mut did_out = String::new();
                 match &commit.record {
                     Some(r) => {
-                        did_in = match &r.subject {
+                        did_out = match &r.subject {
                             Some(s) => match s {
                                 Subj::T1(s) => s.to_owned(),
                                 Subj::T2(_) => return Ok(()),
@@ -170,10 +170,10 @@ pub async fn handle_event_fast(
                     }
                     None => {}
                 }
-                if did_in.is_empty() {
-                    panic!("empty did_in");
+                if did_out.is_empty() {
+                    panic!("empty did_out");
                 }
-                let res = g.add_follow(deser_evt.did, did_in, rkey).await?;
+                let res = g.add_follow(deser_evt.did, did_out, rkey).await?;
                 match res {
                     true => {
                         println!("{drift}ms late")
@@ -183,10 +183,10 @@ pub async fn handle_event_fast(
             }
 
             "app.bsky.graph.block" => {
-                let mut did_in = String::new();
+                let mut vblockee = String::new();
                 match &commit.record {
                     Some(r) => {
-                        did_in = match &r.subject {
+                        vblockee = match &r.subject {
                             Some(s) => match s {
                                 Subj::T1(s) => s.to_owned(),
                                 Subj::T2(_) => return Ok(()),
@@ -196,10 +196,10 @@ pub async fn handle_event_fast(
                     }
                     None => {}
                 }
-                if did_in.is_empty() {
-                    panic!("empty did_in");
+                if vblockee.is_empty() {
+                    panic!("empty vblockee");
                 }
-                g.add_block(deser_evt.did, did_in, rkey).await?;
+                g.add_block(vblockee, deser_evt.did, rkey).await?;
             }
             _ => {
                 //println!("{:?}", mm);
@@ -264,7 +264,7 @@ fn get_rkey(commit: &Commit) -> String {
 }
 
 ////// https://bsky.social/xrpc/com.atproto.repo.listRecords?repo=did:plc:xq3lwzdpijivr5buiizezlni&collection=app.bsky.graph.follow
-/// use this - doesnt
+/// TODO - Blocks
 pub async fn get_follows(
     did: String,
     client: reqwest::Client,
