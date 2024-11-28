@@ -42,7 +42,6 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
 
     let cl = reqwest::ClientBuilder::new()
         .connect_timeout(Duration::from_secs(5))
-        .danger_accept_invalid_certs(true)
         .build()
         .unwrap();
 

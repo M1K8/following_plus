@@ -33,13 +33,6 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
             Method::OPTIONS,
         ])
         .allow_origin(Any);
-    let config = RustlsConfig::from_pem_file(
-        PathBuf::from(".").join("cert.pem"),
-        PathBuf::from(".").join("key.pem"),
-    )
-    .await
-    .unwrap();
-
     let state = StateStruct {
         send_chan: chan.clone(),
     };
@@ -51,7 +44,7 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
         .with_state(Arc::new(state));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 29064));
-    axum_server::bind_rustls(addr, config)
+    axum_server::bind(addr)
         .serve(router.into_make_service())
         .await
         .unwrap();
