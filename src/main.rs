@@ -61,9 +61,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
+    println!("Connected to memgraph");
     let mut graph = GraphModel::new("bolt://localhost:7687", &user, &pw, recv)
         .await
         .unwrap();
+    println!("Connected to memgraph");
     let server_conn = graph.inner();
 
     // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
@@ -80,6 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
 
     // Connect to the websocket
+    println!("Connecting to Bluesky firehose");
     let compressed = !compression.is_empty();
     let url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
     println!("{url}");
