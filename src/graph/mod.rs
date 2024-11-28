@@ -1,7 +1,7 @@
 use neo4rs::{ConfigBuilder, Graph};
 use std::sync::Arc;
 use std::{collections::HashMap, mem, time::Instant};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, MutexGuard};
 
 use crate::common::FetchMessage;
 pub mod queries;
@@ -28,8 +28,18 @@ macro_rules! add_to_queue {
 
         // Check if the queue is full
         if queue.0.len() >= Q_LIMIT {
-            println!("getting lock {}", $query_name);
-            let lock = $self.write_lock.lock().await;
+
+            let lock = match tokio::select! {
+                ll = $self.write_lock.lock() => Some(ll),
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => None
+            } {
+                Some(ll) => ll,
+                None => {
+                    println!("Failed to acquire lock for {}", $query_name);
+                    return Err(neo4rs::Error::ConversionError);
+                }
+            };
+
             println!("got lock {}", $query_name);
             queue.0.push(params);
 
@@ -84,8 +94,16 @@ macro_rules! remove_from_queue {
 
         // Check if the queue is full
         if queue.0.len() >= (Q_LIMIT / 2) { //rarer
-            println!("getting lock {}", $query_name);
-            let lock = $self.write_lock.lock().await;
+            let lock = match tokio::select! {
+                ll = $self.write_lock.lock() => Some(ll),
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => None
+            } {
+                Some(ll) => ll,
+                None => {
+                    println!("Failed to acquire lock for {}", $query_name);
+                    return Err(neo4rs::Error::ConversionError);
+                }
+            };
             println!("got lock {}", $query_name);
             queue.0.push(params);
 

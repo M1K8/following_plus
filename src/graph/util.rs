@@ -118,9 +118,7 @@ pub async fn listen_channel(
         // TODO - Decide what posts to return
         // by calling one or more queries on conn & normalising / sorting the results
 
-
         // TODO - Maybe queue a job to fetch 2nd degree follows? Might be a bit heavy
-        
 
         msg.resp
             .send(PostResp {
