@@ -44,19 +44,19 @@ CREATE (u)-[r:REPLIED_TO {rkey: reply.rkey }]->(p)
 
 pub(crate) const REMOVE_LIKE: &str = r#"
 UNWIND $likes as like
-MATCH (:User {did: like.out})-[r:LIKES {rkey: like.rkey }]->()
+MATCH (:User {did: like.out})-[r:LIKES {rkey: like.rkey }]->(:Post)
 DELETE r
 "#;
 
 pub(crate) const REMOVE_FOLLOW: &str = r#"
 UNWIND $follows as follow
-MATCH (:User {did: follow.out})-[r:FOLLOWS {rkey: follow.rkey }]->()
+MATCH (:User {did: follow.out})-[r:FOLLOWS {rkey: follow.rkey }]->(:User)
 DELETE r
 "#;
 
 pub(crate) const REMOVE_BLOCK: &str = r#"
 UNWIND $blocks as block
-MATCH (:User {did: block.out})-[r:BLOCKED  {rkey: block.rkey} ]->()
+MATCH (:User {did: block.out})-[r:BLOCKED  {rkey: block.rkey} ]->(:User)
 DELETE r
 "#;
 
