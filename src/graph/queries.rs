@@ -85,7 +85,9 @@ DELETE r
 pub(crate) const PURGE_OLD_POSTS: &str = r#"
 MATCH (p:Post) where toInteger(p.timestamp) < timestamp() - (86400000000) // 24 hours
 DETACH DELETE p
+"#;
 
+pub(crate) const PURGE_DUPES: &str = r#"
 MATCH (u1:User)-[r:FOLLOWS]->(u2:User), (u1)-[r2:FOLLOWS]->(u2)
 WHERE id(r) <> id(r2) AND r1.rkey = r2.rkey
 DELETE r2
