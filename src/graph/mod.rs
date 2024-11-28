@@ -280,7 +280,7 @@ impl GraphModel {
         did: String,
         rkey: String,
     ) -> Result<bool, neo4rs::Error> {
-        if did == "did:plc:bsaboe3fhue4d3yyz5pziaed" {
+        if out == "did:plc:bsaboe3fhue4d3yyz5pziaed" {
             println!("Adding follow rkey {rkey}")
         }
         add_to_queue!("follow", self, out, rkey, did)
