@@ -1,7 +1,7 @@
 use neo4rs::{ConfigBuilder, Graph};
 use std::sync::Arc;
 use std::{collections::HashMap, mem, time::Instant};
-use tokio::sync::{mpsc, Mutex, MutexGuard};
+use tokio::sync::{mpsc, Mutex};
 
 use crate::common::FetchMessage;
 pub mod queries;
@@ -40,7 +40,6 @@ macro_rules! add_to_queue {
                 }
             };
 
-            println!("got lock {}", $query_name);
             queue.0.push(params);
 
             let n = Instant::now();
@@ -104,7 +103,6 @@ macro_rules! remove_from_queue {
                     return Err(neo4rs::Error::ConversionError);
                 }
             };
-            println!("got lock {}", $query_name);
             queue.0.push(params);
 
             let n = Instant::now();
