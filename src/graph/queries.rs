@@ -23,7 +23,7 @@ CREATE (u)-[r:LIKES {rkey: like.rkey }]->(p)
 pub(crate) const ADD_POST: &str = r#"
 UNWIND $posts as post
 MERGE (u:User {did: post.did})
-CREATE (u)-[:POSTED {rkey : post.rkey}]->(p: Post { timestamp: post.timestamp, rkey: post.rkey, isReply: post.isReply } )
+CREATE (u)-[:POSTED {rkey : post.rkey}]->(p: Post { timestamp: post.timestamp, rkey: post.rkey, isReply: post.is_reply } )
 "#;
 
 pub(crate) const ADD_REPOST: &str = r#"
@@ -44,31 +44,31 @@ CREATE (u)-[r:REPLIED_TO {rkey: reply.rkey }]->(p)
 
 pub(crate) const REMOVE_LIKE: &str = r#"
 UNWIND $likes as like
-MATCH (:User {did: like.out})-[r:LIKES {rkey: like.rkey }]->(:Post)
+MATCH (:User {did: like.did})-[r:LIKES {rkey: like.rkey }]->(:Post)
 DELETE r
 "#;
 
 pub(crate) const REMOVE_FOLLOW: &str = r#"
 UNWIND $follows as follow
-MATCH (:User {did: follow.out})-[r:FOLLOWS {rkey: follow.rkey }]->(:User)
+MATCH (:User {did: follow.did})-[r:FOLLOWS {rkey: follow.rkey}]->(:User)
 DELETE r
 "#;
 
 pub(crate) const REMOVE_BLOCK: &str = r#"
 UNWIND $blocks as block
-MATCH (:User {did: block.out})-[r:BLOCKED  {rkey: block.rkey} ]->(:User)
+MATCH (:User {did: block.did})-[r:BLOCKED  {rkey: block.rkey} ]->(:User)
 DELETE r
 "#;
 
 pub(crate) const REMOVE_POST: &str = r#"
 UNWIND $posts as post
-MATCH (:User {did: post.out})-[r:POSTED {rkey: post.rkey}]->(p:Post)
+MATCH (:User {did: post.did})-[r:POSTED {rkey: post.rkey}]->(p:Post)
 DETACH DELETE p
 "#;
 
 pub(crate) const REMOVE_REPLY: &str = r#"
 UNWIND $replies as reply
-MATCH (:User {did: reply.out})-[r:REPLIED_TO {rkey: reply.rkey }]->(p:Post) 
+MATCH (:User {did: reply.did})-[r:REPLIED_TO {rkey: reply.rkey }]->(p:Post) 
 with p, r
 where p.is_reply == "y"
 DELETE r
@@ -76,7 +76,7 @@ DELETE r
 
 pub(crate) const REMOVE_REPOST: &str = r#"
 UNWIND $reposts as repost
-MATCH (:User {did: repost.out})-[r:REPOSTED {rkey: repost.rkey }]->()
+MATCH (:User {did: repost.did})-[r:REPOSTED {rkey: repost.rkey }]->()
 DELETE r
 "#;
 

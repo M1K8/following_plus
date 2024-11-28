@@ -90,7 +90,6 @@ pub async fn listen_channel(
             let follow_chunks: Vec<HashMap<String, String>> = follows
                 .iter()
                 .map(|vals| {
-                    println!("{} {} {}", vals.0.clone(), msg.did.clone(), vals.1.clone());
                     HashMap::from([
                         ("out".to_owned(), vals.0.clone()),
                         ("did".to_owned(), msg.did.clone()),
