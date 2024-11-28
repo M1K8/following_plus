@@ -42,9 +42,9 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
 
     let state = StateStruct {
         send_chan: chan.clone(),
-        //cl: reqwest::Client::new(),
     };
 
+    // Todo - not working on box?
     let router = Router::new()
         .route("/get_feed", get(index))
         .layer(ServiceBuilder::new().layer(cors))
@@ -70,7 +70,6 @@ async fn index(
             auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
         None => {
-            println!("No Header!");
             println!("No Header!");
             "".into()
         }

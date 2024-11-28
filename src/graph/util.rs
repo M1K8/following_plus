@@ -13,7 +13,7 @@ use crate::{
     graph::queries::{self, PURGE_OLD_POSTS},
 };
 
-const PURGE_TIME: u64 = 45 * 60;
+const PURGE_TIME: u64 = 15 * 60;
 
 pub fn get_post_uri(did: String, rkey: String) -> String {
     format!("at://{did}/app.bsky.feed.post/{rkey}")
@@ -40,9 +40,10 @@ pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
         println!("Purging old posts");
-        let _lock = spin.lock().await;
+        let lock = spin.lock().await;
         let qry = neo4rs::query(PURGE_OLD_POSTS);
         conn.run(qry).await?;
+        drop(lock);
         println!("Done!");
     }
 }

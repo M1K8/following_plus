@@ -28,7 +28,9 @@ macro_rules! add_to_queue {
 
         // Check if the queue is full
         if queue.0.len() >= Q_LIMIT {
+            println!("getting lock {}", $query_name);
             let lock = $self.write_lock.lock().await;
+            println!("got lock {}", $query_name);
             queue.0.push(params);
 
             let n = Instant::now();
@@ -82,7 +84,9 @@ macro_rules! remove_from_queue {
 
         // Check if the queue is full
         if queue.0.len() >= (Q_LIMIT / 2) { //rarer
+            println!("getting lock {}", $query_name);
             let lock = $self.write_lock.lock().await;
+            println!("got lock {}", $query_name);
             queue.0.push(params);
 
             let n = Instant::now();
