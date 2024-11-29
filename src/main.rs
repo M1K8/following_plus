@@ -1,6 +1,8 @@
 use common::FetchMessage;
 use graph::GraphModel;
 use pprof::protos::Message;
+use std::ops::Sub;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, process};
 use std::{fs::File, io::Write, thread};
 use tokio::sync::mpsc;
@@ -88,7 +90,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     println!("Connected to Bluesky firehose");
 
-    while let Ok(msg) = ws.read_frame().await {
+    while let Ok(msg) = tokio::select! {
+        msg = ws.read_frame() => {
+            msg
+        }
+        _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {
+            if ws.is_closed() {
+                println!("Conn was closed!");
+            }
+            println!("Reconnecting to Bluesky firehose");
+            let start = SystemTime::now();
+            let since_the_epoch = start
+                .duration_since(UNIX_EPOCH).unwrap();
+            let nu_url = url.clone() + format!("&cursor={}",&since_the_epoch.sub(Duration::from_secs(2)).as_micros().to_string()).as_str();
+            ws = ws::connect("jetstream1.us-east.bsky.network", nu_url).await?;
+            println!("Reconnected to Bluesky firehose");
+            ws.read_frame().await
+        }
+    } {
         match msg.opcode {
             fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
                 match msg.payload {
