@@ -9,6 +9,7 @@ pub struct FetchMessage {
     pub resp: mpsc::Sender<PostResp>,
 }
 
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct PostMsg {
     pub uri: String,
     pub reason: String,

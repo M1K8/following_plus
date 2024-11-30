@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use dashmap::DashSet;
 use neo4rs::Graph;
 use tokio::sync::{mpsc, Mutex};
 
@@ -118,6 +119,8 @@ pub async fn listen_channel(
 
             //
 
+            // TODO - Maybe run both http queries in parallel? Might hit rate limits if we do
+
             // Blocks
             {
                 let did_blocks = msg.did.clone();
@@ -156,19 +159,146 @@ pub async fn listen_channel(
             //
             already_seen.insert(msg.did.clone());
         }
+        let qry1 = neo4rs::query(queries::GET_BEST_2ND_DEG_LIKES).param("did", msg.did.clone());
+        let qry2 = neo4rs::query(queries::GET_BEST_2ND_DEG_REPOSTS).param("did", msg.did.clone());
+        let qry3 = neo4rs::query(queries::GET_FOLLOWING_PLUS_LIKES).param("did", msg.did.clone());
+        let qry4 = neo4rs::query(queries::GET_FOLLOWING_PLUS_REPOSTS).param("did", msg.did.clone());
 
-        // TODO - Decide what posts to return
-        // by calling one or more queries on conn & normalising / sorting the results
+        let res = tokio::try_join!(
+            conn.execute(qry1),
+            conn.execute(qry2),
+            conn.execute(qry3),
+            conn.execute(qry4)
+        );
+        let posts = Arc::new(DashSet::new());
+        match res {
+            Ok((mut l1, mut l2, mut l3, mut l4)) => {
+                let p1 = posts.clone();
+                let p2 = posts.clone();
+                let p3 = posts.clone();
+                let p4 = posts.clone();
+                let f1 = tokio::spawn(async move {
+                    loop {
+                        match l1.next().await {
+                            Ok(v) => match v {
+                                Some(v) => {
+                                    let uri: String = v.get("url").unwrap();
+                                    let user: String = v.get("user").unwrap();
+                                    let uri = get_post_uri(user, uri);
+                                    p1.insert(PostMsg {
+                                        reason: "2ND_DEG_LIKE".to_owned(),
+                                        uri,
+                                    });
+                                }
+                                None => {
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                println!("{:?}", e);
+                                break;
+                            }
+                        }
+                    }
+                });
 
-        // TODO - Maybe queue a job to fetch 2nd degree follows? Might be a bit heavy
+                let f2 = tokio::spawn(async move {
+                    loop {
+                        match l2.next().await {
+                            Ok(v) => match v {
+                                Some(v) => {
+                                    let uri: String = v.get("url").unwrap();
+                                    let user: String = v.get("user").unwrap();
+                                    let uri = get_post_uri(user, uri);
+                                    p2.insert(PostMsg {
+                                        reason: "2ND_DEG_REPOSTS".to_owned(),
+                                        uri,
+                                    });
+                                }
+                                None => {
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                println!("{:?}", e);
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                let f3 = tokio::spawn(async move {
+                    loop {
+                        match l3.next().await {
+                            Ok(v) => match v {
+                                Some(v) => {
+                                    let uri: String = v.get("url").unwrap();
+                                    let user: String = v.get("user").unwrap();
+                                    let uri = get_post_uri(user, uri);
+                                    p3.insert(PostMsg {
+                                        reason: "2ND_DEG_LIKE".to_owned(),
+                                        uri,
+                                    });
+                                }
+                                None => {
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                println!("{:?}", e);
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                let f4 = tokio::spawn(async move {
+                    loop {
+                        match l4.next().await {
+                            Ok(v) => match v {
+                                Some(v) => {
+                                    let uri: String = v.get("url").unwrap();
+                                    let user: String = v.get("user").unwrap();
+                                    let uri = get_post_uri(user, uri);
+                                    p4.insert(PostMsg {
+                                        reason: "2ND_DEG_LIKE".to_owned(),
+                                        uri,
+                                    });
+                                }
+                                None => {
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                println!("{:?}", e);
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                match tokio::try_join!(f1, f2, f3, f4) {
+                    Ok(_) => {}
+                    Err(e) => return Err(neo4rs::Error::UnexpectedMessage(e.to_string())),
+                };
+            }
+            Err(e) => return Err(e),
+        }
+        let mut res_vec = Vec::new();
+        let mut ctr = 0;
+        for p in posts.iter() {
+            // TODO - sorting based on ts & reason
+            // TODO - Caching based on did
+            ctr += 1;
+            if ctr >= 31 {
+                break;
+            }
+            res_vec.push(p.key().clone());
+        }
 
         msg.resp
             .send(PostResp {
-                posts: vec![PostMsg {
-                    uri: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
-                        .to_owned(),
-                    reason: "".to_owned(),
-                }],
+                posts: res_vec,
                 cursor: None,
             })
             .await

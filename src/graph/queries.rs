@@ -83,7 +83,7 @@ DELETE r
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) const PURGE_OLD_POSTS: &str = r#"
-MATCH (p:Post) where toInteger(p.timestamp) < timestamp() - (86400000000) // 24 hours
+MATCH (p:Post) where toInteger(p.timestamp) < timestamp() - (3600000000) // 1 hour
 DETACH DELETE p
 "#;
 
@@ -111,22 +111,97 @@ DETACH DELETE u
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub(crate) const GET_FOLLOW_POSTS: &str = r#"
-MATCH (og:User {did: $did})-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
-WITH u,p,og
-OPTIONAL MATCH (og)-[f:FOLLOWS]->(u)
-WITH u, p, CASE WHEN f IS NULL 
-  THEN p ELSE NULL END AS posts
-WHERE posts IS NOT NULL
-RETURN u, posts
-"#;
-
-pub(crate) const GET_2ND_DEG_FOLLOW_POSTS: &str = r#"
+pub(crate) const GET_FOLLOWING_PLUS_LIKES: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
 WITH u,p,og
+// Get all posts 2nd degree follows
+
 OPTIONAL MATCH (og)-[f:FOLLOWS]->(u)
-WITH u, p, CASE WHEN f IS NULL 
-  THEN p ELSE NULL END AS posts
-WHERE posts IS NOT NULL
-RETURN u, posts
+WITH *, CASE WHEN f IS NULL 
+  THEN p ELSE NULL END as post
+WHERE post IS NOT NULL
+// Filter off posts from 1st degree follows
+
+WITH og, u, post
+OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
+with u,b, post, CASE WHEN b IS NULL 
+  THEN post ELSE NULL END as p
+WHERE p IS NOT NULL
+// Filter off posts from blocked users
+
+WITH u, p
+OPTIONAL MATCH (p)<-[l:LIKES]-()
+WITH u, p, toInteger(p.timestamp) AS ts, count(l) AS likes
+MATCH (p) WHERE timestamp() - ts < 162500000 OR likes >= 10
+// Filter off posts older than 5 mins that have < 5 likes
+
+RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 30
+"#;
+
+pub(crate) const GET_FOLLOWING_PLUS_REPOSTS: &str = r#"
+MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
+WITH u,p,og
+// Get all posts 2nd degree follows
+
+OPTIONAL MATCH (og)-[f:FOLLOWS]->(u)
+WITH *, CASE WHEN f IS NULL 
+  THEN p ELSE NULL END as post
+WHERE post IS NOT NULL
+// Filter off posts from 1st degree follows
+
+WITH og, u, post
+OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
+with u,b, post, CASE WHEN b IS NULL 
+  THEN post ELSE NULL END as p
+WHERE p IS NOT NULL
+// Filter off posts from blocked users
+
+WITH u, p
+OPTIONAL MATCH (p)<-[rp:REPOSTED]-()
+WITH u, p, toInteger(p.timestamp) AS ts, count (rp) AS reposts
+MATCH (p) WHERE timestamp() - ts < 162500000 OR reposts >= 10
+// Filter off posts older than 5 mins that have < 10 reposts
+
+RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 30
+"#;
+
+pub(crate) const GET_BEST_2ND_DEG_REPOSTS: &str = r#"
+MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:REPOSTED]->(p:Post)
+WITH u,p,og
+// Get all reposts 2nd degree follows
+
+WITH og, u, post
+OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
+with u,b, post, CASE WHEN b IS NULL 
+  THEN post ELSE NULL END as p
+WHERE p IS NOT NULL
+// Filter off posts from blocked users
+
+WITH u, p
+OPTIONAL MATCH (p)<-[l:LIKES]-()
+WITH u, p, count(l) AS likes
+MATCH (p) WHERE likes >= 100
+
+
+RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 15
+"#;
+
+pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
+MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:LIKED]->(p:Post)
+WITH u,p,og
+// Get all reposts 2nd degree follows
+
+WITH og, u, post
+OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
+with u,b, post, CASE WHEN b IS NULL 
+  THEN post ELSE NULL END as p
+WHERE p IS NOT NULL
+// Filter off posts from blocked users
+
+WITH u, p
+OPTIONAL MATCH (p)<-[l:LIKES]-()
+WITH u, p, count(l) AS likes
+MATCH (p) WHERE likes >= 100
+
+RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 15
 "#;

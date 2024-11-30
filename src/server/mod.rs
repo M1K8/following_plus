@@ -64,11 +64,10 @@ async fn index(
         }
         None => {
             println!("No Header!");
-            "".into()
+            return Err(axum::http::StatusCode::NOT_FOUND);
         }
     };
     println!("user id {}", iss);
-    //
 
     let (send, mut recv) = tokio::sync::mpsc::channel(1);
     state
