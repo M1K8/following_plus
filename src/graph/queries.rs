@@ -83,7 +83,7 @@ DELETE r
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) const PURGE_OLD_POSTS: &str = r#"
-MATCH (p:Post) where toInteger(p.timestamp) < timestamp() - (3600000000) // 1 hour
+MATCH (p:Post) where toInteger(p.timestamp) < timestamp() - (36000000000) // 10 hour
 DETACH DELETE p
 "#;
 
