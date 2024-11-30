@@ -171,11 +171,12 @@ WITH u,p,og
 // Get all reposts 2nd degree follows
 
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
-with u,b, post, CASE WHEN b IS NULL 
-  THEN post ELSE NULL END as p
-WHERE p IS NOT NULL
+with u, b, p, CASE WHEN b IS NULL 
+  THEN p ELSE NULL END as post
+WHERE post IS NOT NULL
 // Filter off posts from blocked users
 
+WITH u, post as p
 WITH u, p
 OPTIONAL MATCH (p)<-[l:LIKES]-()
 WITH u, p, count(l) AS likes
@@ -191,12 +192,12 @@ WITH u,p,og
 // Get all reposts 2nd degree follows
 
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
-with u,b, post, CASE WHEN b IS NULL 
-  THEN post ELSE NULL END as p
-WHERE p IS NOT NULL
+with u, b, p, CASE WHEN b IS NULL 
+  THEN p ELSE NULL END as post
+WHERE post IS NOT NULL
 // Filter off posts from blocked users
 
-WITH u, p
+WITH u, post as p
 OPTIONAL MATCH (p)<-[l:LIKES]-()
 WITH u, p, count(l) AS likes
 MATCH (p) WHERE likes >= 100
