@@ -170,7 +170,6 @@ MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:REPOSTED]
 WITH u,p,og
 // Get all reposts 2nd degree follows
 
-WITH og, u, post
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 with u,b, post, CASE WHEN b IS NULL 
   THEN post ELSE NULL END as p
@@ -191,7 +190,6 @@ MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:LIKED]->(
 WITH u,p,og
 // Get all reposts 2nd degree follows
 
-WITH og, u, post
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 with u,b, post, CASE WHEN b IS NULL 
   THEN post ELSE NULL END as p
