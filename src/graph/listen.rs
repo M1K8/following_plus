@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use dashmap::DashSet;
+use dashmap::{DashMap, DashSet};
 use neo4rs::Graph;
 use tokio::sync::{mpsc, Mutex};
 
@@ -159,7 +159,7 @@ pub async fn listen_channel(
             conn.execute(qry3),
             conn.execute(qry4)
         );
-        let posts = Arc::new(DashSet::new());
+        let posts = Arc::new(DashMap::new());
         match res {
             Ok((mut l1, mut l2, mut l3, mut l4)) => {
                 let p1 = posts.clone();
@@ -175,10 +175,13 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
-                                    p1.insert(PostMsg {
-                                        reason: format!("2ND_DEG_LIKE_{reply}").to_owned(),
-                                        uri,
-                                    });
+                                    p1.insert(
+                                        uri.clone(),
+                                        PostMsg {
+                                            reason: format!("2ND_DEG_LIKE_{reply}").to_owned(),
+                                            uri,
+                                        },
+                                    );
                                 }
                                 None => {
                                     break;
@@ -201,10 +204,13 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
-                                    p2.insert(PostMsg {
-                                        reason: format!("2ND_DEG_REPOSTS_{reply}").to_owned(),
-                                        uri,
-                                    });
+                                    p2.insert(
+                                        uri.clone(),
+                                        PostMsg {
+                                            reason: format!("2ND_DEG_REPOSTS_{reply}").to_owned(),
+                                            uri,
+                                        },
+                                    );
                                 }
                                 None => {
                                     break;
@@ -227,10 +233,13 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
-                                    p3.insert(PostMsg {
-                                        reason: format!("FPLUS_LIKES_{reply}").to_owned(),
-                                        uri,
-                                    });
+                                    p3.insert(
+                                        uri.clone(),
+                                        PostMsg {
+                                            reason: format!("FPLUS_LIKES_{reply}").to_owned(),
+                                            uri,
+                                        },
+                                    );
                                 }
                                 None => {
                                     break;
@@ -253,10 +262,13 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
-                                    p4.insert(PostMsg {
-                                        reason: format!("FPLUS_REPOSTS_{reply}").to_owned(),
-                                        uri,
-                                    });
+                                    p4.insert(
+                                        uri.clone(),
+                                        PostMsg {
+                                            reason: format!("FPLUS_REPOSTS_{reply}").to_owned(),
+                                            uri,
+                                        },
+                                    );
                                 }
                                 None => {
                                     break;
@@ -286,7 +298,7 @@ pub async fn listen_channel(
             // TODO - sorting based on ts & reason
             // TODO - Caching based on did
             println!("Adding {:?}", p.key());
-            res_vec.push(p.key().clone());
+            res_vec.push(p.value().clone());
         }
 
         msg.resp
