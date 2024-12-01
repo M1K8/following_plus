@@ -225,7 +225,7 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let uri = util::get_post_uri(user, uri);
                                     p3.insert(PostMsg {
-                                        reason: "2ND_DEG_LIKE".to_owned(),
+                                        reason: "FPLUS_LIKES".to_owned(),
                                         uri,
                                     });
                                 }
@@ -250,7 +250,7 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let uri = util::get_post_uri(user, uri);
                                     p4.insert(PostMsg {
-                                        reason: "2ND_DEG_LIKE".to_owned(),
+                                        reason: "FPLUS_REPOSTS".to_owned(),
                                         uri,
                                     });
                                 }
