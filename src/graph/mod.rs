@@ -4,6 +4,7 @@ use std::{collections::HashMap, mem, time::Instant};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::common::FetchMessage;
+mod listen;
 pub mod queries;
 mod util;
 
@@ -207,7 +208,7 @@ impl GraphModel {
         });
 
         tokio::spawn(async move {
-            match util::listen_channel(write_lock_new_user, conn_new_user, recv).await {
+            match listen::listen_channel(write_lock_new_user, conn_new_user, recv).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };

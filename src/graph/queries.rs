@@ -1,3 +1,13 @@
+pub(crate) const MARK_SEEN: &str = r#"
+MATCH (u:User {did: $did})
+SET u.seen = true
+"#;
+
+pub(crate) const IF_SEEN: &str = r#"
+MATCH (u:User {did: $did})
+RETURN u.seen AS seen
+"#;
+
 pub(crate) const ADD_FOLLOW: &str = r#"
 UNWIND $follows as follow
 MERGE (u:User {did: follow.did})

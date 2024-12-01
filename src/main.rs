@@ -90,46 +90,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     println!("Connected to Bluesky firehose");
 
-    while let Ok(msg) = tokio::select! {
-        msg = ws.read_frame() => {
-            msg
-        }
-        _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {
-            if ws.is_closed() {
-                println!("Conn was closed!");
+    'outer: loop {
+        while let Ok(msg) = tokio::select! {
+            msg = ws.read_frame() => {
+                msg
             }
-            println!("Reconnecting to Bluesky firehose");
-            let start = SystemTime::now();
-            let since_the_epoch = start
-                .duration_since(UNIX_EPOCH).unwrap();
-            let nu_url = url.clone() + format!("&cursor={}",&since_the_epoch.sub(Duration::from_secs(2)).as_micros().to_string()).as_str();
-            ws = ws::connect("jetstream1.us-east.bsky.network", nu_url).await?;
-            println!("Reconnected to Bluesky firehose");
-            ws.read_frame().await
-        }
-    } {
-        match msg.opcode {
-            fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
-                match msg.payload {
-                    fastwebsockets::Payload::Bytes(m) => {
-                        match bsky::handle_event_fast(&m, &mut graph, compressed).await {
-                            Err(e) => println!("Error handling event: {}", e),
-                            _ => {}
-                        }
-                    }
-                    _ => {
-                        panic!("Unsupported payload type {:?}", msg.payload);
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {
+                if ws.is_closed() {
+                    println!("Conn was closed!");
+                }
+                println!("Reconnecting to Bluesky firehose");
+                let start = SystemTime::now();
+                let since_the_epoch = start
+                    .duration_since(UNIX_EPOCH).unwrap();
+                let nu_url = url.clone() + format!("&cursor={}",&since_the_epoch.sub(Duration::from_secs(2)).as_micros().to_string()).as_str();
+                ws = match ws::connect("jetstream1.us-east.bsky.network", nu_url).await{
+                    Ok(ws) => ws,
+                    Err(e) => {
+                        println!("Error reconnecting to firehose: {}", e);
+                        continue 'outer;
                     }
                 };
+                println!("Reconnected to Bluesky firehose");
+                ws.read_frame().await
             }
-            fastwebsockets::OpCode::Close => {
-                println!("Closing connection, trying to reopen...");
-                ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
-                continue;
+        } {
+            match msg.opcode {
+                fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
+                    match msg.payload {
+                        fastwebsockets::Payload::Bytes(m) => {
+                            match bsky::handle_event_fast(&m, &mut graph, compressed).await {
+                                Err(e) => println!("Error handling event: {}", e),
+                                _ => {}
+                            }
+                        }
+                        _ => {
+                            panic!("Unsupported payload type {:?}", msg.payload);
+                        }
+                    };
+                }
+                fastwebsockets::OpCode::Close => {
+                    println!("Closing connection, trying to reopen...");
+                    ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
+                    continue;
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
-
-    Ok(())
 }
