@@ -171,7 +171,6 @@ pub async fn listen_channel(
                         match l1.next().await {
                             Ok(v) => match v {
                                 Some(v) => {
-                                    println!("Adding {:?}", v);
                                     let uri: String = v.get("url").unwrap();
                                     let user: String = v.get("user").unwrap();
                                     let uri = util::get_post_uri(user, uri);
@@ -278,14 +277,11 @@ pub async fn listen_channel(
             },
         }
         let mut res_vec = Vec::new();
-        let mut ctr = 0;
+        let mut _ctr = 0;
         for p in posts.iter() {
             // TODO - sorting based on ts & reason
             // TODO - Caching based on did
-            ctr += 1;
-            if ctr >= 31 {
-                break;
-            }
+            println!("Adding {:?}", p.key());
             res_vec.push(p.key().clone());
         }
 
