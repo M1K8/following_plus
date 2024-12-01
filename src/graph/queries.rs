@@ -145,7 +145,7 @@ WITH u, p, toInteger(p.timestamp) AS ts, count(l) AS likes
 MATCH (p) WHERE timestamp() - ts < 650000000 OR likes >= 10
 // Filter off posts older than 5 mins that have < 5 likes
 
-RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 30
+RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply ORDER BY toInteger(p.timestamp) DESC LIMIT 30
 "#;
 
 pub(crate) const GET_FOLLOWING_PLUS_REPOSTS: &str = r#"
@@ -172,7 +172,7 @@ WITH u, p, toInteger(p.timestamp) AS ts, count (rp) AS reposts
 MATCH (p) WHERE timestamp() - ts < 650000000 OR reposts >= 10
 // Filter off posts older than 5 mins that have < 10 reposts
 
-RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 30
+RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply ORDER BY toInteger(p.timestamp) DESC LIMIT 30
 "#;
 
 pub(crate) const GET_BEST_2ND_DEG_REPOSTS: &str = r#"
@@ -193,7 +193,7 @@ WITH u, p, count(l) AS likes
 MATCH (p) WHERE likes >= 100
 
 
-RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 15
+RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply ORDER BY toInteger(p.timestamp) DESC LIMIT 15
 "#;
 
 pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
@@ -212,5 +212,5 @@ OPTIONAL MATCH (p)<-[l:LIKES]-()
 WITH u, p, count(l) AS likes
 MATCH (p) WHERE likes >= 100
 
-RETURN u.did AS user, p.rkey AS url ORDER BY toInteger(p.timestamp) DESC LIMIT 15
+RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply ORDER BY toInteger(p.timestamp) DESC LIMIT 15
 "#;

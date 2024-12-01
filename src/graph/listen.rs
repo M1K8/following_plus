@@ -173,9 +173,10 @@ pub async fn listen_channel(
                                 Some(v) => {
                                     let uri: String = v.get("url").unwrap();
                                     let user: String = v.get("user").unwrap();
+                                    let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
                                     p1.insert(PostMsg {
-                                        reason: "2ND_DEG_LIKE".to_owned(),
+                                        reason: format!("2ND_DEG_LIKE_{reply}").to_owned(),
                                         uri,
                                     });
                                 }
@@ -198,9 +199,10 @@ pub async fn listen_channel(
                                 Some(v) => {
                                     let uri: String = v.get("url").unwrap();
                                     let user: String = v.get("user").unwrap();
+                                    let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
                                     p2.insert(PostMsg {
-                                        reason: "2ND_DEG_REPOSTS".to_owned(),
+                                        reason: format!("2ND_DEG_REPOSTS_{reply}").to_owned(),
                                         uri,
                                     });
                                 }
@@ -223,9 +225,10 @@ pub async fn listen_channel(
                                 Some(v) => {
                                     let uri: String = v.get("url").unwrap();
                                     let user: String = v.get("user").unwrap();
+                                    let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
                                     p3.insert(PostMsg {
-                                        reason: "FPLUS_LIKES".to_owned(),
+                                        reason: format!("FPLUS_LIKES_{reply}").to_owned(),
                                         uri,
                                     });
                                 }
@@ -248,9 +251,10 @@ pub async fn listen_channel(
                                 Some(v) => {
                                     let uri: String = v.get("url").unwrap();
                                     let user: String = v.get("user").unwrap();
+                                    let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
                                     p4.insert(PostMsg {
-                                        reason: "FPLUS_REPOSTS".to_owned(),
+                                        reason: format!("FPLUS_REPOSTS_{reply}").to_owned(),
                                         uri,
                                     });
                                 }
@@ -274,7 +278,7 @@ pub async fn listen_channel(
             Err(e) => {
                 println!("Err: {}", e);
                 return Err(e);
-            },
+            }
         }
         let mut res_vec = Vec::new();
         let mut _ctr = 0;
