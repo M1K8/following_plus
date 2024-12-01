@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use dashmap::{DashMap, DashSet};
+use dashmap::DashMap;
 use neo4rs::Graph;
 use tokio::sync::{mpsc, Mutex};
 
@@ -34,6 +34,7 @@ pub async fn listen_channel(
                     posts: vec![PostMsg {
                         uri: "".to_owned(),
                         reason: "".to_owned(),
+                        timestamp: 0,
                     }],
                     cursor: Some("EMPTY_DID".to_owned()),
                 })
@@ -175,11 +176,13 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
+                                    let timestamp: u64 = v.get("ts").unwrap();
                                     p1.insert(
                                         uri.clone(),
                                         PostMsg {
                                             reason: format!("2ND_DEG_LIKE_{reply}").to_owned(),
                                             uri,
+                                            timestamp,
                                         },
                                     );
                                 }
@@ -204,11 +207,13 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
+                                    let timestamp: u64 = v.get("ts").unwrap();
                                     p2.insert(
                                         uri.clone(),
                                         PostMsg {
                                             reason: format!("2ND_DEG_REPOSTS_{reply}").to_owned(),
                                             uri,
+                                            timestamp,
                                         },
                                     );
                                 }
@@ -233,11 +238,13 @@ pub async fn listen_channel(
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
                                     let uri = util::get_post_uri(user, uri);
+                                    let timestamp: u64 = v.get("ts").unwrap();
                                     p3.insert(
                                         uri.clone(),
                                         PostMsg {
                                             reason: format!("FPLUS_LIKES_{reply}").to_owned(),
                                             uri,
+                                            timestamp,
                                         },
                                     );
                                 }
@@ -261,12 +268,14 @@ pub async fn listen_channel(
                                     let uri: String = v.get("url").unwrap();
                                     let user: String = v.get("user").unwrap();
                                     let reply: String = v.get("isReply").unwrap();
+                                    let timestamp: u64 = v.get("ts").unwrap();
                                     let uri = util::get_post_uri(user, uri);
                                     p4.insert(
                                         uri.clone(),
                                         PostMsg {
                                             reason: format!("FPLUS_REPOSTS_{reply}").to_owned(),
                                             uri,
+                                            timestamp,
                                         },
                                     );
                                 }

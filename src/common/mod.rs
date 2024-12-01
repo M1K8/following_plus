@@ -13,6 +13,7 @@ pub struct FetchMessage {
 pub struct PostMsg {
     pub uri: String,
     pub reason: String,
+    pub timestamp: u64,
 }
 
 pub struct PostResp {
