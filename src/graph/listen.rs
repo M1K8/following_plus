@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use dashmap::DashSet;
 use neo4rs::Graph;
@@ -59,7 +55,10 @@ pub async fn listen_channel(
         };
 
         let seen: bool = match seen_res.next().await {
-            Ok(s) => s.unwrap().get("seen").unwrap(),
+            Ok(s) => match s {
+                Some(s) => s.get("seen").unwrap(),
+                None => false,
+            },
             Err(e) => return Err(e),
         };
 
