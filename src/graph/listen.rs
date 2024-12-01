@@ -171,6 +171,7 @@ pub async fn listen_channel(
                         match l1.next().await {
                             Ok(v) => match v {
                                 Some(v) => {
+                                    println!("Adding {:?}", v);
                                     let uri: String = v.get("url").unwrap();
                                     let user: String = v.get("user").unwrap();
                                     let uri = util::get_post_uri(user, uri);
@@ -271,7 +272,10 @@ pub async fn listen_channel(
                     Err(e) => return Err(neo4rs::Error::UnexpectedMessage(e.to_string())),
                 };
             }
-            Err(e) => return Err(e),
+            Err(e) => {
+                println!("Err: {}", e);
+                return Err(e);
+            },
         }
         let mut res_vec = Vec::new();
         let mut ctr = 0;
