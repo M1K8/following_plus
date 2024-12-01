@@ -306,7 +306,7 @@ pub async fn listen_channel(
         for p in posts.iter() {
             // TODO - sorting based on ts & reason
             // TODO - Caching based on did
-            println!("Adding {:?}", p.key());
+            println!("Adding {:?}", p.value());
             res_vec.push(p.value().clone());
         }
 
