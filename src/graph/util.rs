@@ -4,7 +4,7 @@ use neo4rs::Graph;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use crate::graph::queries::PURGE_OLD_POSTS;
+use crate::graph::queries::{PURGE_NO_FOLLOWERS, PURGE_NO_FOLLOWING, PURGE_OLD_POSTS};
 
 const PURGE_TIME: u64 = 15 * 60;
 
@@ -32,10 +32,17 @@ pub fn pluralize(word: &str) -> String {
 pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4rs::Error> {
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
-        info!("Purging old posts");
+        info!("Purging old posts, duplicates, and accounts not following anyone");
         let lock = spin.lock().await;
         let qry = neo4rs::query(PURGE_OLD_POSTS);
         conn.run(qry).await?;
+
+        let qry = neo4rs::query(PURGE_NO_FOLLOWERS);
+        conn.run(qry).await?;
+
+        let qry = neo4rs::query(PURGE_NO_FOLLOWING);
+        conn.run(qry).await?;
+
         drop(lock);
         info!("Done!");
     }

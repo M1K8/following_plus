@@ -97,12 +97,6 @@ MATCH (p:Post) where toInteger(p.timestamp) < timestamp() - (36000000000) // 10 
 DETACH DELETE p
 "#;
 
-pub(crate) const PURGE_DUPES: &str = r#"
-MATCH (u1:User)-[r:FOLLOWS]->(u2:User), (u1)-[r2:FOLLOWS]->(u2)
-WHERE id(r) <> id(r2) AND r1.rkey = r2.rkey
-DELETE r2
-"#;
-
 pub(crate) const PURGE_NO_FOLLOWERS: &str = r#"
 MATCH (u:User)
 OPTIONAL MATCH (:User)-[r:FOLLOWS]->(u)
