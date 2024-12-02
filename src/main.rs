@@ -1,11 +1,13 @@
 use common::FetchMessage;
 use graph::GraphModel;
 use pprof::protos::Message;
+use simple_moving_average::{SumTreeSMA, SMA};
 use std::ops::Sub;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, process};
 use std::{fs::File, io::Write, thread};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tracing::info;
 use tracing_subscriber;
 
@@ -93,7 +95,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     info!("Connected to Bluesky firehose");
-
+    let ma = SumTreeSMA::<_, i64, 200>::new();
+    let ctr = Arc::new(Mutex::new(ma));
+    let ctr2 = ctr.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            let avg = ctr2.lock().await.get_average();
+            info!("Average drift over 5s: {}ms", avg);
+        }
+    });
     'outer: loop {
         while let Ok(msg) = tokio::select! {
             msg = ws.read_frame() => {
@@ -125,7 +136,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         fastwebsockets::Payload::Bytes(m) => {
                             match bsky::handle_event_fast(&m, &mut graph, compressed).await {
                                 Err(e) => info!("Error handling event: {}", e),
-                                _ => {}
+                                Ok(drift) => {
+                                    ctr.lock().await.add_sample(drift);
+                                }
                             }
                         }
                         _ => {

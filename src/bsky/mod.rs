@@ -34,7 +34,7 @@ pub async fn handle_event_fast(
     evt: &[u8],
     g: &mut GraphModel,
     compressed: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<i64, Box<dyn std::error::Error>> {
     let mut spam = HashSet::new();
     spam.insert("did:plc:xdx2v7gyd5dmfqt7v77gf457".to_owned());
     spam.insert("did:plc:a56vfzkrxo2bh443zgjxr4ix".to_owned());
@@ -64,7 +64,7 @@ pub async fn handle_event_fast(
     let commit: &Commit = match &deser_evt.commit {
         Some(m) => m,
         None => {
-            return Ok(());
+            return Ok(0);
         }
     };
     let rkey = commit.rkey.clone();
@@ -75,7 +75,7 @@ pub async fn handle_event_fast(
     // }
     //info!("{drift} ms");
     if spam.contains(&deser_evt.did) {
-        return Ok(());
+        return Ok(0);
     }
     let now = Utc::now().timestamp_micros();
 
@@ -93,7 +93,7 @@ pub async fn handle_event_fast(
                                 if now - t.timestamp_micros()
                                     > chrono::Duration::hours(24).num_microseconds().unwrap()
                                 {
-                                    return Ok(());
+                                    return Ok(0);
                                 }
                                 t.timestamp_micros()
                             }
@@ -113,15 +113,10 @@ pub async fn handle_event_fast(
                     _ => {}
                 }
 
-                let res = g
+                g
                     .add_post(deser_evt.did, rkey, &created_at, is_reply, is_image)
                     .await?;
-                match res {
-                    true => {
-                        info!("{drift}ms late")
-                    }
-                    false => {}
-                }
+                return Ok(drift);
             }
 
             "app.bsky.feed.repost" => {
@@ -131,15 +126,10 @@ pub async fn handle_event_fast(
                     panic!("empty rkey");
                 }
 
-                let res = g
+                g
                     .add_repost(deser_evt.did, rkey_out.to_string(), rkey)
                     .await?;
-                match res {
-                    true => {
-                        info!("{drift}ms late")
-                    }
-                    false => {}
-                }
+                return Ok(drift);
             }
 
             "app.bsky.feed.like" => {
@@ -149,15 +139,10 @@ pub async fn handle_event_fast(
                     panic!("empty rkey");
                 }
 
-                let res = g
+                g
                     .add_like(deser_evt.did, rkey_out.to_string(), rkey)
                     .await?;
-                match res {
-                    true => {
-                        info!("{drift}ms late")
-                    }
-                    false => {}
-                }
+                return Ok(drift);
             }
 
             "app.bsky.graph.follow" => {
@@ -167,9 +152,9 @@ pub async fn handle_event_fast(
                         did_out = match &r.subject {
                             Some(s) => match s {
                                 Subj::T1(s) => s.to_owned(),
-                                Subj::T2(_) => return Ok(()),
+                                Subj::T2(_) => return Ok(0),
                             },
-                            None => return Ok(()),
+                            None => return Ok(0),
                         };
                     }
                     None => {}
@@ -177,13 +162,8 @@ pub async fn handle_event_fast(
                 if did_out.is_empty() {
                     panic!("empty did_out");
                 }
-                let res = g.add_follow(deser_evt.did, did_out, rkey).await?;
-                match res {
-                    true => {
-                        info!("{drift}ms late")
-                    }
-                    false => {}
-                }
+                g.add_follow(deser_evt.did, did_out, rkey).await?;
+                return Ok(drift);
             }
 
             "app.bsky.graph.block" => {
@@ -193,9 +173,9 @@ pub async fn handle_event_fast(
                         vblockee = match &r.subject {
                             Some(s) => match s {
                                 Subj::T1(s) => s.to_owned(),
-                                Subj::T2(_) => return Ok(()),
+                                Subj::T2(_) => return Ok(0),
                             },
-                            None => return Ok(()),
+                            None => return Ok(0),
                         };
                     }
                     None => {}
@@ -237,7 +217,7 @@ pub async fn handle_event_fast(
         //info!("{:?}", deser_evt.commit.unwrap().collection);
     }
 
-    return Ok(());
+    return Ok(0);
 }
 
 fn parse_rkey(uri: &str) -> String {
