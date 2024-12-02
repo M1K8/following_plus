@@ -15,6 +15,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
+use tracing::info;
 use urlencoding::decode;
 mod auth;
 pub mod types;
@@ -63,11 +64,11 @@ async fn index(
             auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
         None => {
-            println!("No Header!");
+            info!("No Header!");
             return Err(axum::http::StatusCode::NOT_FOUND);
         }
     };
-    println!("user id {}", iss);
+    info!("user id {}", iss);
 
     let (send, mut recv) = tokio::sync::mpsc::channel(1);
     state
@@ -93,7 +94,7 @@ async fn index(
     let resp = match resp {
         Some(r) => r,
         None => {
-            println!("nil response from channel");
+            info!("nil response from channel");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };

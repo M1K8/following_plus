@@ -1,9 +1,9 @@
+use crate::common::FetchMessage;
 use neo4rs::{ConfigBuilder, Graph};
 use std::sync::Arc;
 use std::{collections::HashMap, mem, time::Instant};
 use tokio::sync::{mpsc, Mutex};
-
-use crate::common::FetchMessage;
+use tracing::info;
 mod listen;
 pub mod queries;
 mod util;
@@ -36,7 +36,7 @@ macro_rules! add_to_queue {
             } {
                 Some(ll) => ll,
                 None => {
-                    println!("Failed to acquire lock for {}", $query_name);
+                    info!("Failed to acquire lock for {}", $query_name);
                     return Err(neo4rs::Error::ConversionError);
                 }
             };
@@ -51,7 +51,7 @@ macro_rules! add_to_queue {
             match  $self.inner.run(qry).await{
                 Ok(_) => {},
                 Err(e) => {
-                    println!("Error on query {}", $query_name);
+                    info!("Error on query {}", $query_name);
                     return Err(e);
                 }
             };
@@ -59,7 +59,7 @@ macro_rules! add_to_queue {
 
             let el = n.elapsed().as_millis();
             if el > 4 {
-                println!(
+                info!(
                     "Slow query {}: {}ms (~{}/s))",
                     stringify!($query_name),
                     el,
@@ -100,7 +100,7 @@ macro_rules! remove_from_queue {
             } {
                 Some(ll) => ll,
                 None => {
-                    println!("Failed to acquire lock for {}", $query_name);
+                    info!("Failed to acquire lock for {}", $query_name);
                     return Err(neo4rs::Error::ConversionError);
                 }
             };
@@ -115,7 +115,7 @@ macro_rules! remove_from_queue {
             match  $self.inner.run(qry).await{
                 Ok(_) => {},
                 Err(e) => {
-                    println!("Error on query rm_{}", $query_name);
+                    info!("Error on query rm_{}", $query_name);
                     return Err(e);
                 }
             };
@@ -123,7 +123,7 @@ macro_rules! remove_from_queue {
 
             let el = n.elapsed().as_millis();
             if el > 4 {
-                println!(
+                info!(
                     "Slow query REMOVE {}: {}ms (~{}/s))",
                     stringify!($query_name),
                     el,
@@ -203,7 +203,7 @@ impl GraphModel {
         tokio::spawn(async move {
             match util::kickoff_purge(write_lock_purge, conn_purge).await {
                 Ok(_) => {}
-                Err(e) => println!("Error purging old posts: {}", e),
+                Err(e) => info!("Error purging old posts: {}", e),
             };
         });
 

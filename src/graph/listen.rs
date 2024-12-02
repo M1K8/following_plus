@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use dashmap::DashMap;
 use neo4rs::Graph;
 use tokio::sync::{mpsc, Mutex};
+use tracing::info;
 
 use crate::{
     bsky,
@@ -42,7 +43,7 @@ pub async fn listen_channel(
                 .unwrap();
             continue;
         }
-        println!("Got event for {:?}", msg.did);
+        info!("Got event for {:?}", msg.did);
 
         // See if user has been seen
 
@@ -50,7 +51,7 @@ pub async fn listen_channel(
         let mut seen_res = match conn.execute(qry).await {
             Ok(s) => s,
             Err(e) => {
-                println!("Error on backfilling follows for {}", &msg.did);
+                info!("Error on backfilling follows for {}", &msg.did);
                 return Err(e);
             }
         };
@@ -90,14 +91,14 @@ pub async fn listen_channel(
                     match conn.run(qry).await {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("Error on backfilling follows for {}", &msg.did);
+                            info!("Error on backfilling follows for {}", &msg.did);
                             return Err(e);
                         }
                     };
                     drop(l);
                 }
 
-                println!("Written {} follows for {}", follows.len(), &msg.did);
+                info!("Written {} follows for {}", follows.len(), &msg.did);
             }
 
             // Blocks
@@ -126,7 +127,7 @@ pub async fn listen_channel(
                     match conn.run(qry).await {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("Error on backfilling blocks for {}", &msg.did);
+                            info!("Error on backfilling blocks for {}", &msg.did);
                             drop(l);
                             return Err(e);
                         }
@@ -134,14 +135,14 @@ pub async fn listen_channel(
                     drop(l);
                 }
 
-                println!("Written {} blocks for {}", blocks.len(), &msg.did);
+                info!("Written {} blocks for {}", blocks.len(), &msg.did);
 
                 let qry = neo4rs::query(queries::MARK_SEEN).param("did", msg.did.clone());
                 let l = write_lock.lock().await;
                 match conn.run(qry).await {
                     Ok(s) => s,
                     Err(e) => {
-                        println!("Error on backfilling follows for {}", &msg.did);
+                        info!("Error on backfilling follows for {}", &msg.did);
                         drop(l);
                         return Err(e);
                     }
@@ -191,7 +192,7 @@ pub async fn listen_channel(
                                 }
                             },
                             Err(e) => {
-                                println!("{:?}", e);
+                                info!("{:?}", e);
                                 break;
                             }
                         }
@@ -222,7 +223,7 @@ pub async fn listen_channel(
                                 }
                             },
                             Err(e) => {
-                                println!("{:?}", e);
+                                info!("{:?}", e);
                                 break;
                             }
                         }
@@ -253,7 +254,7 @@ pub async fn listen_channel(
                                 }
                             },
                             Err(e) => {
-                                println!("{:?}", e);
+                                info!("{:?}", e);
                                 break;
                             }
                         }
@@ -284,7 +285,7 @@ pub async fn listen_channel(
                                 }
                             },
                             Err(e) => {
-                                println!("{:?}", e);
+                                info!("{:?}", e);
                                 break;
                             }
                         }
@@ -297,7 +298,7 @@ pub async fn listen_channel(
                 };
             }
             Err(e) => {
-                println!("Err: {}", e);
+                info!("Err: {}", e);
                 return Err(e);
             }
         }
@@ -306,7 +307,7 @@ pub async fn listen_channel(
         for p in posts.iter() {
             // TODO - sorting based on ts & reason
             // TODO - Caching based on did
-            println!("Adding {:?}", p.value());
+            info!("Adding {:?}", p.value());
             res_vec.push(p.value().clone());
         }
 

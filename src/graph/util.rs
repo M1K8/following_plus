@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use neo4rs::Graph;
 use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::graph::queries::PURGE_OLD_POSTS;
 
@@ -31,11 +32,11 @@ pub fn pluralize(word: &str) -> String {
 pub async fn kickoff_purge(spin: Arc<Mutex<()>>, conn: Graph) -> Result<(), neo4rs::Error> {
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
-        println!("Purging old posts");
+        info!("Purging old posts");
         let lock = spin.lock().await;
         let qry = neo4rs::query(PURGE_OLD_POSTS);
         conn.run(qry).await?;
         drop(lock);
-        println!("Done!");
+        info!("Done!");
     }
 }

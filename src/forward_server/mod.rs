@@ -15,6 +15,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
+use tracing::info;
 
 use crate::server::types;
 mod auth;
@@ -80,7 +81,7 @@ async fn forward(
                 .unwrap();
         }
     };
-    println!("Forwarding for user id {}", iss);
+    info!("Forwarding for user id {}", iss);
     let tok = bearer.unwrap();
     let tok = tok.0 .0.token();
 
@@ -99,10 +100,10 @@ async fn forward(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("builder err: {}", e.is_builder());
-            println!("body err: {}", e.is_body());
-            println!("req: {}", e.is_request());
-            println!("Error: {}", e.to_string());
+            info!("builder err: {}", e.is_builder());
+            info!("body err: {}", e.is_body());
+            info!("req: {}", e.is_request());
+            info!("Error: {}", e.to_string());
             return Response::builder()
                 .status(403)
                 .body(Body::from(e.to_string()))
@@ -114,7 +115,7 @@ async fn forward(
 
     let status = resp.status().clone();
     let byt = resp.bytes().await.unwrap();
-    println!("Got resp {:?}", byt);
+    info!("Got resp {:?}", byt);
 
     axum_res.status(status).body(Body::from(byt)).unwrap()
 }
@@ -131,7 +132,7 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
         Ok(service_did) => {
             let hostname = env::var("FEEDGEN_HOSTNAME").unwrap_or("".into());
             if !service_did.ends_with(hostname.as_str()) {
-                println!("service_did does not end with hostname");
+                info!("service_did does not end with hostname");
                 return Err(());
             } else {
                 let known_service = types::KnownService {
@@ -148,7 +149,7 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
             }
         }
         Err(_) => {
-            println!("service_did not found");
+            info!("service_did not found");
             return Err(());
         }
     }

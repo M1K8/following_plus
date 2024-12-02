@@ -2,9 +2,12 @@ use crate::bsky::types::*;
 use crate::graph::GraphModel;
 use chrono::Utc;
 use once_cell::sync::Lazy;
-use std::collections::HashSet;
+
 use std::mem;
+use std::{collections::HashSet, time::SystemTime};
+use tracing::{error, info};
 use zstd::bulk::Decompressor;
+
 mod types;
 
 const DICT: &'static [u8; 112640] = include_bytes!("./dictionary");
@@ -19,6 +22,7 @@ fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
                 match serde_json::from_slice(m.as_slice()) {
                     Ok(m) => return Some(m),
                     Err(err) => {
+                        error!("{:?}", SystemTime::now());
                         panic!("Error decompressing payload: {err}")
                     }
                 };
@@ -69,7 +73,7 @@ pub async fn handle_event_fast(
     // if drift > 35000 {
     //     panic!("{drift}ms late (probably need to speed up ingest)!!!");
     // }
-    //println!("{drift} ms");
+    //info!("{drift} ms");
     if spam.contains(&deser_evt.did) {
         return Ok(());
     }
@@ -114,7 +118,7 @@ pub async fn handle_event_fast(
                     .await?;
                 match res {
                     true => {
-                        println!("{drift}ms late")
+                        info!("{drift}ms late")
                     }
                     false => {}
                 }
@@ -132,7 +136,7 @@ pub async fn handle_event_fast(
                     .await?;
                 match res {
                     true => {
-                        println!("{drift}ms late")
+                        info!("{drift}ms late")
                     }
                     false => {}
                 }
@@ -150,7 +154,7 @@ pub async fn handle_event_fast(
                     .await?;
                 match res {
                     true => {
-                        println!("{drift}ms late")
+                        info!("{drift}ms late")
                     }
                     false => {}
                 }
@@ -176,7 +180,7 @@ pub async fn handle_event_fast(
                 let res = g.add_follow(deser_evt.did, did_out, rkey).await?;
                 match res {
                     true => {
-                        println!("{drift}ms late")
+                        info!("{drift}ms late")
                     }
                     false => {}
                 }
@@ -202,7 +206,7 @@ pub async fn handle_event_fast(
                 g.add_block(vblockee, deser_evt.did, rkey).await?;
             }
             _ => {
-                //println!("{:?}", mm);
+                //info!("{:?}", mm);
             }
         }
     } else if commit.operation == "delete" {
@@ -221,7 +225,7 @@ pub async fn handle_event_fast(
                 let res = g.rm_follow(deser_evt.did, rkey).await?;
                 match res {
                     true => {
-                        println!("{drift}ms late")
+                        info!("{drift}ms late")
                     }
                     false => {}
                 }
@@ -230,12 +234,12 @@ pub async fn handle_event_fast(
                 g.rm_block(deser_evt.did, rkey).await?;
             }
             _ => {
-                //println!("{:?}", deser_evt);
+                //info!("{:?}", deser_evt);
             }
         }
     } else {
         // TODO - Handle Updates (lists, starterpacks?)
-        //println!("{:?}", deser_evt.commit.unwrap().collection);
+        //info!("{:?}", deser_evt.commit.unwrap().collection);
     }
 
     return Ok(());
@@ -274,7 +278,7 @@ pub async fn get_follows(
     did: String,
     client: reqwest::Client,
 ) -> Result<Vec<(String, String)>, reqwest::Error> {
-    println!("Getting follows for {:?}", did);
+    info!("Getting follows for {:?}", did);
     let base_url = format!(
         "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.follow&limit=100"
     );
@@ -282,14 +286,14 @@ pub async fn get_follows(
     let mut req = match client.get(&base_url).build() {
         Ok(r) => r,
         Err(e) => {
-            println!("req {:?}", e);
+            info!("req {:?}", e);
             return Err(e);
         }
     };
     let mut resp: FollowsResp = match client.execute(req).await?.json().await {
         Ok(r) => r,
         Err(e) => {
-            println!("resp {:?}", e);
+            info!("resp {:?}", e);
             return Err(e);
         }
     };
@@ -302,7 +306,7 @@ pub async fn get_follows(
         }
         match &resp.cursor {
             Some(c) => {
-                println!("Processing {:?}", c);
+                info!("Processing {:?}", c);
                 let url = base_url.clone() + format!("&cursor={}", c).as_str();
                 req = client.get(&url).build()?;
                 let r = match client.execute(req).await {
@@ -312,7 +316,7 @@ pub async fn get_follows(
                 resp = match r.json().await {
                     Ok(r) => r,
                     Err(e) => {
-                        println!("{:?}", e);
+                        info!("{:?}", e);
                         break;
                     }
                 };
@@ -330,7 +334,7 @@ pub async fn get_blocks(
     did: String,
     client: reqwest::Client,
 ) -> Result<Vec<(String, String)>, reqwest::Error> {
-    println!("Getting blocks for {:?}", did);
+    info!("Getting blocks for {:?}", did);
     let base_url = format!(
         "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.block&limit=100"
     );
@@ -338,14 +342,14 @@ pub async fn get_blocks(
     let mut req = match client.get(&base_url).build() {
         Ok(r) => r,
         Err(e) => {
-            println!("req {:?}", e);
+            info!("req {:?}", e);
             return Err(e);
         }
     };
     let mut resp: FollowsResp = match client.execute(req).await?.json().await {
         Ok(r) => r,
         Err(e) => {
-            println!("resp {:?}", e);
+            info!("resp {:?}", e);
             return Err(e);
         }
     };
@@ -358,7 +362,7 @@ pub async fn get_blocks(
         }
         match &resp.cursor {
             Some(c) => {
-                println!("Processing {:?}", c);
+                info!("Processing {:?}", c);
                 let url = base_url.clone() + format!("&cursor={}", c).as_str();
                 req = client.get(&url).build()?;
                 let r = match client.execute(req).await {
@@ -368,7 +372,7 @@ pub async fn get_blocks(
                 resp = match r.json().await {
                     Ok(r) => r,
                     Err(e) => {
-                        println!("{:?}", e);
+                        info!("{:?}", e);
                         break;
                     }
                 };

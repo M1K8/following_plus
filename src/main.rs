@@ -6,6 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, process};
 use std::{fs::File, io::Write, thread};
 use tokio::sync::mpsc;
+use tracing::info;
+use tracing_subscriber;
 
 pub mod bsky;
 pub mod common;
@@ -21,6 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
+    tracing_subscriber::fmt::init();
+
     if !env::var("PROFILE_ENABLE").unwrap_or("".into()).is_empty() {
         let guard = pprof::ProfilerGuardBuilder::default()
             .frequency(1000)
@@ -29,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap();
 
         ctrlc::set_handler(move || {
-            println!("Shutting down");
+            info!("Shutting down");
             match guard.report().build() {
                 Ok(report) => {
                     let mut file = File::create("profile.pb").unwrap();
@@ -56,39 +60,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // If env says we need to forward DB requests, just do that & nothing else
     if !forward_mode.is_empty() {
-        println!("Starting forward web server");
+        info!("Starting forward web server");
         forward_server::serve(forward_mode).await.unwrap();
-        println!("Exiting forward web server");
+        info!("Exiting forward web server");
         return Ok(());
     }
 
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
-    println!("Connecting to memgraph");
+    info!("Connecting to memgraph");
     let mut graph = GraphModel::new("bolt://localhost:7687", &user, &pw, recv)
         .await
         .unwrap();
-    println!("Connected to memgraph");
+    info!("Connected to memgraph");
     let server_conn = graph.inner();
 
     // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
     thread::spawn(move || {
         let web_runtime: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
-        println!("Starting web listener thread");
+        info!("Starting web listener thread");
         let wait = web_runtime.spawn(async move {
             let _ = server_conn;
             server::serve(send).await.unwrap();
         });
         web_runtime.block_on(wait).unwrap();
-        println!("Exiting web listener thread");
+        info!("Exiting web listener thread");
     });
     //
 
     // Connect to the websocket
-    println!("Connecting to Bluesky firehose");
+    info!("Connecting to Bluesky firehose");
     let compressed = !compression.is_empty();
     let url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
-    println!("Connected to Bluesky firehose");
+    info!("Connected to Bluesky firehose");
 
     'outer: loop {
         while let Ok(msg) = tokio::select! {
@@ -97,9 +101,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {
                 if ws.is_closed() {
-                    println!("Conn was closed!");
+                    info!("Conn was closed!");
                 }
-                println!("Reconnecting to Bluesky firehose");
+                info!("Reconnecting to Bluesky firehose");
                 let start = SystemTime::now();
                 let since_the_epoch = start
                     .duration_since(UNIX_EPOCH).unwrap();
@@ -107,11 +111,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ws = match ws::connect("jetstream1.us-east.bsky.network", nu_url).await{
                     Ok(ws) => ws,
                     Err(e) => {
-                        println!("Error reconnecting to firehose: {}", e);
+                        info!("Error reconnecting to firehose: {}", e);
                         continue 'outer;
                     }
                 };
-                println!("Reconnected to Bluesky firehose");
+                info!("Reconnected to Bluesky firehose");
                 ws.read_frame().await
             }
         } {
@@ -120,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match msg.payload {
                         fastwebsockets::Payload::Bytes(m) => {
                             match bsky::handle_event_fast(&m, &mut graph, compressed).await {
-                                Err(e) => println!("Error handling event: {}", e),
+                                Err(e) => info!("Error handling event: {}", e),
                                 _ => {}
                             }
                         }
@@ -130,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                 }
                 fastwebsockets::OpCode::Close => {
-                    println!("Closing connection, trying to reopen...");
+                    info!("Closing connection, trying to reopen...");
                     ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
                     continue;
                 }
