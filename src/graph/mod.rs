@@ -93,7 +93,7 @@ macro_rules! remove_from_queue {
         )*
 
         // Check if the queue is full
-        if queue.0.len() >= (Q_LIMIT - 10) {
+        if queue.0.len() >= (Q_LIMIT ) {
             let lock = match tokio::select! {
                 ll = $self.write_lock.lock() => Some(ll),
                 _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => None
