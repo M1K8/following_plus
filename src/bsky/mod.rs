@@ -14,22 +14,20 @@ const DICT: &'static [u8; 112640] = include_bytes!("./dictionary");
 static mut DECOMP: Lazy<Decompressor<'static>> =
     Lazy::new(|| zstd::bulk::Decompressor::with_dictionary(DICT).unwrap());
 
-fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
-    unsafe {
-        let msg = DECOMP.decompress(m, 1024000);
-        match msg {
-            Ok(m) => {
-                match serde_json::from_slice(m.as_slice()) {
-                    Ok(m) => return Some(m),
-                    Err(err) => {
-                        error!("{:?}", SystemTime::now());
-                        panic!("Error decompressing payload: {err}")
-                    }
-                };
-            }
-            Err(err) => panic!("Error getting payload: {err}"),
-        };
-    }
+unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
+    let msg = DECOMP.decompress(m, 51200); // 5kb
+    match msg {
+        Ok(m) => {
+            match serde_json::from_slice(m.as_slice()) {
+                Ok(m) => return Some(m),
+                Err(err) => {
+                    error!("{:?}", SystemTime::now());
+                    panic!("Error decompressing payload: {err}")
+                }
+            };
+        }
+        Err(err) => panic!("Error getting payload: {err}"),
+    };
 }
 
 pub async fn handle_event_fast(
@@ -49,7 +47,9 @@ pub async fn handle_event_fast(
 
     let deser_evt: BskyEvent;
     if compressed {
-        deser_evt = decompress_fast(&evt).unwrap();
+        unsafe {
+            deser_evt = decompress_fast(&evt).unwrap();
+        }
     } else {
         match serde_json::from_slice(&evt) {
             Ok(m) => {
