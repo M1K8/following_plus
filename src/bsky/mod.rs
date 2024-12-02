@@ -203,7 +203,6 @@ pub async fn handle_event_fast(
             }
             "app.bsky.graph.follow" => {
                 g.rm_follow(deser_evt.did, rkey).await?;
-                info!("{drift}ms late")
             }
             "app.bsky.graph.block" => {
                 g.rm_block(deser_evt.did, rkey).await?;
