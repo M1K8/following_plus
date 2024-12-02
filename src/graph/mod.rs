@@ -58,7 +58,7 @@ macro_rules! add_to_queue {
             drop(lock);
 
             let el = n.elapsed().as_millis();
-            if el > 4 {
+            if el > 10 {
                 info!(
                     "Slow query {}: {}ms (~{}/s))",
                     stringify!($query_name),
@@ -122,7 +122,7 @@ macro_rules! remove_from_queue {
             drop(lock);
 
             let el = n.elapsed().as_millis();
-            if el > 4 {
+            if el > 10 {
                 info!(
                     "Slow query REMOVE {}: {}ms (~{}/s))",
                     stringify!($query_name),
