@@ -18,12 +18,12 @@ fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
             Ok(m) => {
                 match serde_json::from_slice(m.as_slice()) {
                     Ok(m) => return Some(m),
-                    Err(_err) => {
-                        panic!("1")
+                    Err(err) => {
+                        panic!("Error decompressing payload: {err}")
                     }
                 };
             }
-            Err(_) => panic!("2"),
+            Err(err) => panic!("Error getting payload: {err}"),
         };
     }
 }
@@ -66,9 +66,9 @@ pub async fn handle_event_fast(
     let rkey = commit.rkey.clone();
 
     let drift = (Utc::now().naive_utc().and_utc().timestamp_micros() - deser_evt.time_us) / 1000;
-    if drift > 35000 {
-        panic!("{drift}ms late (probably need to speed up ingest)!!!");
-    }
+    // if drift > 35000 {
+    //     panic!("{drift}ms late (probably need to speed up ingest)!!!");
+    // }
     //println!("{drift} ms");
     if spam.contains(&deser_evt.did) {
         return Ok(());
