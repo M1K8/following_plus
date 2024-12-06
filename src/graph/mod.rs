@@ -54,7 +54,6 @@ impl GraphModel {
                 prev_recv.unwrap().recv().await;
             }
 
-            warn!("Let's go! {id}");
             tokio::spawn(async move {
                 match retry(
                     ExponentialBackoffBuilder::default()
