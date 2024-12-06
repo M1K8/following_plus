@@ -7,22 +7,24 @@ use serde_derive::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct FollowsResp {
     pub cursor: Option<String>,
-    pub follows: Vec<Account>,
+    pub records: Vec<Follow>,
+}
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Follow {
+    pub uri: String,
+    pub cid: String,
+    pub value: FollowVal,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FollowersResp {
-    pub cursor: Option<String>,
-    pub followers: Vec<Account>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Account {
-    pub did: String,
-    pub handle: String,
-    // dont care about the other stuff
+pub struct FollowVal {
+    #[serde(rename = "$type")]
+    pub type_field: String,
+    pub subject: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -67,7 +69,7 @@ pub struct Record {
 #[serde(rename_all = "camelCase")]
 pub struct Image {
     pub alt: String,
-    pub aspect_ratio: HashMap<String, String>,
+    pub aspect_ratio: Option<HashMap<String, String>>,
     pub image: ImageInternal,
 }
 

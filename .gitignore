@@ -1,2 +1,6 @@
 target
 .cargo
+feed-generator
+cert.pem
+key.pem
+docker-compose.yml

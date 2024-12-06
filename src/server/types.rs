@@ -1,9 +1,10 @@
-use axum::{http::StatusCode, response::IntoResponse, Json};
-use serde::Serialize;
+use axum::{response::IntoResponse, Json};
+
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Response {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     pub feed: Vec<Post>,
 }
