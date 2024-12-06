@@ -202,7 +202,7 @@ impl GraphModel {
             .run(neo4rs::query("CREATE INDEX ON :Post(rkey)"))
             .await?;
 
-        inner.run(neo4rs::query("CREATE INDEX ON :Post")).await?;
+        //inner.run(neo4rs::query("CREATE INDEX ON :Post")).await?;
 
         // Set off background job to do whatever cleaning we want
         let conn_purge: Graph = inner.clone();
