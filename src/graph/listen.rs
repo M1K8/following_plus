@@ -359,10 +359,16 @@ async fn write_follows(
             ])
         })
         .collect();
-    let len = &follow_chunks.len();
-    let follow_chunks = follow_chunks.chunks(len / 20).collect::<Vec<_>>();
+    let len = follow_chunks.len();
+    let chunks;
+    if len < 12 as usize {
+        chunks = follow_chunks.chunks(1).collect::<Vec<_>>();
+    } else {
+        chunks = follow_chunks.chunks(len / 20).collect::<Vec<_>>();
+    }
+
     let mut qrys = Vec::new();
-    for follow_chunk in follow_chunks {
+    for follow_chunk in chunks {
         let qry = neo4rs::query(queries::ADD_FOLLOW).param("follows", follow_chunk);
         qrys.push(qry);
     }

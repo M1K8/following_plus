@@ -3,8 +3,8 @@ use crate::graph::GraphModel;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 
+use std::collections::HashSet;
 use std::mem;
-use std::{collections::HashSet, time::SystemTime};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use zstd::bulk::Decompressor;
@@ -22,8 +22,11 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
             match serde_json::from_slice(m.as_slice()) {
                 Ok(m) => return Some(m),
                 Err(err) => {
-                    error!("{:?}", SystemTime::now());
-                    panic!("Error decompressing payload: {err}")
+                    error!(
+                        "Error decompressing payload {:?}: {err}",
+                        String::from_utf8(m)
+                    );
+                    return None;
                 }
             };
         }
@@ -72,6 +75,7 @@ pub async fn handle_event_fast(
             return Ok((0, rec));
         }
     };
+
     let rkey = mem::take(&mut commit.rkey); //yoinky sploinky
     let now = Utc::now().timestamp_micros();
     let drift = (now - deser_evt.time_us) / 1000;

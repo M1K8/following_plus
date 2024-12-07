@@ -1,4 +1,6 @@
+use bytes::BytesMut;
 use common::FetchMessage;
+use fastwebsockets::{Frame, OpCode, Payload};
 use graph::GraphModel;
 use pprof::protos::Message;
 use simple_moving_average::{SumTreeSMA, SMA};
@@ -7,7 +9,7 @@ use std::time::SystemTime;
 use std::{env, mem, process};
 use std::{fs::File, io::Write, thread};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber;
 
 pub mod bsky;
@@ -115,6 +117,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
             let avg = ctr2.lock().await.get_average();
+            if avg > 50000 {
+                error!("Something wrong!");
+                panic!()
+            }
             info!("Average drift over 60s: {}ms", avg);
         }
     });
@@ -125,12 +131,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             msg = ws.read_frame() => {
                 msg
             }
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {
-                if ws.is_closed() {
-                    info!("Conn was closed!");
-                }
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => {
                 info!("Reconnecting to Bluesky firehose");
-                let nu_url = url.clone() + format!("&cursor={}",&last_time.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()).as_str();
+                let nu_url = url.clone() + format!("&cursor={}",&last_time.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_micros()).as_str();
                 ws = match ws::connect("jetstream1.us-east.bsky.network", nu_url).await{
                     Ok(ws) => {
                         ws
@@ -152,6 +155,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         fastwebsockets::Payload::Bytes(m) => {
                             let l = lock.read().await;
                             let rec = mem::take(&mut recv);
+
                             match bsky::handle_event_fast(&m, &mut graph, rec, compressed).await {
                                 Err(e) => info!("Error handling event: {}", e),
                                 Ok((drift, recv_chan)) => {
@@ -165,6 +169,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                 }
                             }
+
                             drop(l);
                         }
                         _ => {
@@ -180,5 +185,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => {}
             }
         }
+        error!("WS Failed")
     }
 }

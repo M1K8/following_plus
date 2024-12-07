@@ -1,4 +1,4 @@
-// Shamelessly yoinked from https://github.com/skyfeed-dev/indexer-rust/blob/main/src/main.rs
+// Shamelessly yoinked from https://github.com/skyfeed-dev/indexer-rust/blob/main/src/websocket/conn.rs
 
 use std::{future::Future, sync::Arc};
 
@@ -10,7 +10,7 @@ use hyper::{
     Request,
 };
 use hyper_util::rt::TokioIo;
-use tokio::{net::TcpStream, task};
+use tokio::net::TcpStream;
 use tokio_rustls::{
     rustls::{
         pki_types::{pem::PemObject, CertificateDer, ServerName},
@@ -42,7 +42,7 @@ pub async fn connect(
     let tls_domain = ServerName::try_from(String::from(domain))?;
     let tls_stream = connector.connect(tls_domain, tcp_stream).await?;
 
-    let req_builder = Request::builder()
+    let req = Request::builder()
         .method("GET")
         .uri(uri)
         .header("Host", domain)
@@ -50,8 +50,8 @@ pub async fn connect(
         .header(CONNECTION, "upgrade")
         .header(SEC_WEBSOCKET_KEY, handshake::generate_key())
         .header(SEC_WEBSOCKET_VERSION, "13")
-        .body(String::new());
-    let req = req_builder?;
+        .body(String::new())?;
+
     let (ws, _) = handshake::client(&TokioExecutor, req, tls_stream).await?;
 
     Ok(ws)
@@ -64,6 +64,6 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        task::spawn(fut);
+        tokio::spawn(fut);
     }
 }
