@@ -67,7 +67,7 @@ impl GraphModel {
                         match tx.run_queries(q_vals).await {
                             Ok(_) => {
                                 let el: u128 = n.elapsed().as_millis();
-                                if el > 105 {
+                                if el > 200 {
                                     info!(
                                         "Slow queries on tx: {}ms (~{}/s))",
                                         el,

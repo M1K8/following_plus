@@ -268,7 +268,7 @@ pub async fn get_follows(
             match resp.json().await {
                 Ok(r) => r,
                 Err(e) => {
-                    info!("resp returned {}: {:?}", status, e);
+                    warn!("resp returned {}: {:?}", status, e);
                     return Err(e);
                 }
             }
