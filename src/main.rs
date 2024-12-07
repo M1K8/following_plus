@@ -185,6 +185,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => {}
             }
         }
-        error!("WS Failed")
+        error!("WS Failed");
+        let e = ws.read_frame().await;
+        match e {
+            Ok(_) => info!("Were ok?"),
+            Err(e) => error!("Err: {e}"),
+        };
     }
 }
