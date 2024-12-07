@@ -1,3 +1,5 @@
+use core::error;
+use std::time::SystemTime;
 use std::{collections::HashMap, mem, sync::Arc, time::Duration};
 
 use backoff::{future::retry, Error, ExponentialBackoffBuilder};
@@ -59,11 +61,11 @@ pub async fn listen_channel(
 
     // k: did, v: uint post index
     // TODO - Write here & fetch further back if scrolled; dup queries w/ timestamp gate (format!'d)
-    let cached = HashMap::<String, Vec<PostMsg>>::new();
+    //let mut cached = HashMap::<String, Vec<PostMsg>>::new();
 
     let seen_map = Arc::new(DashSet::new());
     loop {
-        let msg = match recv.recv().await {
+        let mut msg = match recv.recv().await {
             Some(s) => s,
             None => continue,
         };
@@ -90,6 +92,13 @@ pub async fn listen_channel(
             continue;
         }
         info!("Got event for {:?}", msg.did);
+        let cursor;
+        if msg.cursor.is_some() {
+            let cur = mem::take(&mut msg.cursor);
+            cursor = cur.unwrap();
+        } else {
+            cursor = now();
+        }
 
         // Firstly, check the cache for this user, then check if the cursor is within the last 5 mins, otherwise junk it (if the cleanup job hasnt already)
         // Moreover, change queries
@@ -104,6 +113,7 @@ pub async fn listen_channel(
         let seen_map = seen_map.clone();
 
         let bl_seen_map = seen_map.clone();
+
         match get_follows(&did, cl_follows).await {
             Ok(follows) => {
                 tokio::spawn(async move {
@@ -119,6 +129,7 @@ pub async fn listen_channel(
                     let mut set = JoinSet::new();
                     let all_followers_chunks: Vec<&[(String, String)]> =
                         follows.chunks(follows.len() / 12).collect();
+
                     for idx in 0..all_followers_chunks.len() {
                         let mut c = match all_followers_chunks.get(idx) {
                             Some(c) => *c,
@@ -197,87 +208,126 @@ pub async fn listen_channel(
                 }
             };
         }
-
-        // Fetch posts
-        let qry1 = neo4rs::query(queries::GET_BEST_2ND_DEG_LIKES).param("did", msg.did.clone());
-        let qry2 = neo4rs::query(queries::GET_BEST_2ND_DEG_REPOSTS).param("did", msg.did.clone());
-        let qry3 = neo4rs::query(queries::GET_FOLLOWING_PLUS_LIKES).param("did", msg.did.clone());
-        let qry4 = neo4rs::query(queries::GET_FOLLOWING_PLUS_REPOSTS).param("did", msg.did.clone());
-
-        let res = tokio::try_join!(
-            read_conn.execute(qry1),
-            read_conn.execute(qry2),
-            read_conn.execute(qry3),
-            read_conn.execute(qry4)
-        );
-        let posts = Arc::new(DashMap::new());
-        match res {
-            Ok((mut l1, mut l2, mut l3, mut l4)) => {
-                let p1 = posts.clone();
-                let p2 = posts.clone();
-                let p3 = posts.clone();
-                let p4 = posts.clone();
-                let f1 = tokio::spawn(async move {
-                    loop {
-                        process_next!(l1.next().await, p1, "2ND_DEG_LIKES");
-                    }
-                });
-
-                let f2 = tokio::spawn(async move {
-                    loop {
-                        process_next!(l2.next().await, p2, "2ND_DEG_REPOSTS");
-                    }
-                });
-
-                let f3 = tokio::spawn(async move {
-                    loop {
-                        process_next!(l3.next().await, p3, "FPLUS_LIKES");
-                    }
-                });
-
-                let f4 = tokio::spawn(async move {
-                    loop {
-                        process_next!(l4.next().await, p4, "FPLUS_REPOSTS");
-                    }
-                });
-
-                match tokio::try_join!(f1, f2, f3, f4) {
-                    Ok(_) => {}
-                    Err(e) => return Err(neo4rs::Error::UnexpectedMessage(e.to_string())),
-                };
-            }
-            Err(e) => {
-                warn!("Error joining post fetches for {}: {}", &msg.did, e);
-                continue;
-            }
-        }
-        let mut res_vec = Vec::new();
-        let mut _ctr = 0;
-        for p in posts.iter() {
-            res_vec.push(p.value().clone());
-        }
-
-        res_vec.sort_unstable();
-        info!("Adding {:?}", res_vec.len());
-        for v in res_vec.iter() {
-            info!("Adding {:?}", v);
-        }
-
-        match msg
-            .resp
-            .send(PostResp {
-                posts: res_vec,
-                cursor: None,
-            })
-            .await
-        {
+        match fetch_posts(msg, &read_conn, cursor).await {
             Ok(_) => {}
-            Err(e) => {
-                warn!("Error replying to post request for {}: {:?}", msg.did, e);
-                continue;
-            }
-        };
+            Err(_) => continue,
+        }
     }
+}
+
+fn now() -> String {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_micros()
+        .to_string()
+}
+
+async fn fetch_posts(
+    msg: FetchMessage,
+    read_conn: &Graph,
+    time: String,
+) -> Result<(), Box<dyn error::Error>> {
+    // Fetch posts
+    let qry1 = neo4rs::query(
+        &queries::GET_BEST_2ND_DEG_LIKES
+            .to_string()
+            .replace("{}", &time),
+    )
+    .param("did", msg.did.clone());
+    let qry2 = neo4rs::query(
+        &queries::GET_BEST_2ND_DEG_REPOSTS
+            .to_string()
+            .replace("{}", &time),
+    )
+    .param("did", msg.did.clone());
+    let qry3 = neo4rs::query(
+        &queries::GET_FOLLOWING_PLUS_LIKES
+            .to_string()
+            .replace("{}", &time),
+    )
+    .param("did", msg.did.clone());
+    let qry4 = neo4rs::query(
+        &queries::GET_FOLLOWING_PLUS_REPOSTS
+            .to_string()
+            .replace("{}", &time),
+    )
+    .param("did", msg.did.clone());
+
+    let res = tokio::try_join!(
+        read_conn.execute(qry1),
+        read_conn.execute(qry2),
+        read_conn.execute(qry3),
+        read_conn.execute(qry4)
+    );
+    let posts = Arc::new(DashMap::new());
+    match res {
+        Ok((mut l1, mut l2, mut l3, mut l4)) => {
+            let p1 = posts.clone();
+            let p2 = posts.clone();
+            let p3 = posts.clone();
+            let p4 = posts.clone();
+            let f1 = tokio::spawn(async move {
+                loop {
+                    process_next!(l1.next().await, p1, "2ND_DEG_LIKES");
+                }
+            });
+
+            let f2 = tokio::spawn(async move {
+                loop {
+                    process_next!(l2.next().await, p2, "2ND_DEG_REPOSTS");
+                }
+            });
+
+            let f3 = tokio::spawn(async move {
+                loop {
+                    process_next!(l3.next().await, p3, "FPLUS_LIKES");
+                }
+            });
+
+            let f4 = tokio::spawn(async move {
+                loop {
+                    process_next!(l4.next().await, p4, "FPLUS_REPOSTS");
+                }
+            });
+
+            match tokio::try_join!(f1, f2, f3, f4) {
+                Ok(_) => {}
+                Err(e) => return Err(Box::new(neo4rs::Error::UnexpectedMessage(e.to_string()))),
+            };
+        }
+        Err(e) => {
+            warn!("Error joining post fetches for {}: {}", &msg.did, e);
+            return Err(Box::new(e));
+        }
+    }
+    let mut res_vec = Vec::new();
+    let mut _ctr = 0;
+    for p in posts.iter() {
+        res_vec.push(p.value().clone());
+    }
+
+    res_vec.sort_unstable();
+    info!("Adding {:?}", res_vec.len());
+    for v in res_vec.iter() {
+        info!("Adding {:?}", v);
+    }
+
+    match msg
+        .resp
+        .send(PostResp {
+            posts: res_vec,
+            cursor: Some(now()),
+        })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            warn!("Error replying to post request for {}: {:?}", msg.did, e);
+            return Err(Box::new(e));
+        }
+    };
+    Ok(())
 }
 
 async fn get_follows(

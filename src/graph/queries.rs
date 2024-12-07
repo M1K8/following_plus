@@ -200,7 +200,7 @@ WITH p, u, l, toInteger(p.timestamp) AS ts, count(l) AS likes
 WHERE l IS NOT NULL
 MATCH (p) WHERE likes >= 50
 WITH DISTINCT p, u, ts
-
+WHERE ts < {}
 
 RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply, ts ORDER BY ts DESC LIMIT 20
 "#;
@@ -231,6 +231,7 @@ WHERE rp IS NOT NULL
 MATCH (p) WHERE reposts >= 50
 // Filter off posts older than 5 mins that have < 10 reposts
 WITH DISTINCT p, u, ts
+WHERE ts < {}
 
 RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply, ts ORDER BY ts DESC LIMIT 20
 "#;
@@ -254,7 +255,12 @@ WITH u, b, p, CASE WHEN b IS NULL
 WHERE post IS NOT NULL
 // Filter off posts from blocked users
 
-RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply, toInteger(p.timestamp) AS ts ORDER BY ts DESC LIMIT 20
+WITH *, toInteger(p.timestamp) AS ts
+WHERE ts < {}
+
+
+
+RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply,  ts ORDER BY ts DESC LIMIT 20
 "#;
 
 pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
@@ -275,6 +281,7 @@ WITH u, b, p, CASE WHEN b IS NULL
   THEN p ELSE NULL END as post
 WHERE post IS NOT NULL
 // Filter off posts from blocked users
+WHERE ts < {}
 
-RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply, toInteger(p.timestamp) AS ts ORDER BY ts DESC LIMIT 20
+RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply, ts ORDER BY ts DESC LIMIT 20
 "#;
