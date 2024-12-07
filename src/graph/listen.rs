@@ -116,6 +116,7 @@ pub async fn listen_channel(
                     let all_follows = Arc::new(DashSet::new());
                     if !seen_map.contains(&did_follows) {
                         follows.iter().for_each(|f| {
+                            info!("adding {} {} {}", f.0, f.1, &did_follows);
                             all_follows.insert((f.0.clone(), f.1.clone(), did_follows.clone()));
                         });
                     }
