@@ -96,7 +96,7 @@ pub async fn listen_channel(
         // See if user has been seen
 
         // Follows
-        let did_follows = msg.did.clone();
+        let did = msg.did.clone();
         let cl_follows = client.clone();
 
         let lock = write_lock.clone();
@@ -104,20 +104,20 @@ pub async fn listen_channel(
         let seen_map = seen_map.clone();
 
         let bl_seen_map = seen_map.clone();
-        seen_map.insert(did_follows.clone());
-        match get_follows(&did_follows, cl_follows).await {
+        seen_map.insert(did.clone());
+        match get_follows(&did, cl_follows).await {
             Ok(follows) => {
                 tokio::spawn(async move {
                     info!(
-                        "Recursively fetching {} follows for {did_follows}",
+                        "Recursively fetching {} follows for {did}",
                         follows.len()
                     );
 
                     let all_follows = Arc::new(DashSet::new());
-                    if !seen_map.contains(&did_follows) {
+                    if !seen_map.contains(&did) {
                         follows.iter().for_each(|f| {
-                            info!("adding {} {} {}", f.0, f.1, &did_follows);
-                            all_follows.insert((f.0.clone(), f.1.clone(), did_follows.clone()));
+                            info!("adding {} {} {}", f.0, f.1, &did);
+                            all_follows.insert((f.0.clone(), f.1.clone(), did.clone()));
                         });
                     }
 
@@ -127,16 +127,16 @@ pub async fn listen_channel(
                     let mut set = JoinSet::new();
                     let all_followers_chunks: Vec<&[(String, String)]> =
                         follows.chunks(follows.len() / 12).collect();
-                    for idx in 0..=11 {
-                        let c = match all_followers_chunks.get(idx) {
+                    info!("There are {} chunks", all_followers_chunks.len());
+                    for idx in 0..all_followers_chunks.len() {
+                        let mut c = match all_followers_chunks.get(idx) {
                             Some(c) => *c,
                             None => {
                                 continue;
                             }
                         };
-                        let mut e = c;
                         // this is so fun i love doing this
-                        let yoinked = mem::take(&mut e);
+                        let yoinked = mem::take(&mut c);
                         let chunk = Vec::from(yoinked);
                         //
 
@@ -178,13 +178,13 @@ pub async fn listen_channel(
                     set.join_all().await;
 
                     info!(
-                        "Done Recursively fetching {} for {did_follows}; writing...",
+                        "Done Recursively fetching {} for {did}; writing...",
                         follows.len()
                     );
 
                     match write_follows(all_follows, &second_deg_conn, lock).await {
                         Some(e) => warn!(
-                            "Error writing 2nd degree follows for {did_follows}: {:?}",
+                            "Error writing 2nd degree follows for {did}: {:?}",
                             e
                         ),
                         None => {}
@@ -362,7 +362,8 @@ async fn write_follows(
         .collect();
     let len = follow_chunks.len();
     let chunks;
-    if len < 12 as usize {
+    if len < 20 as usize {
+        warn!("Less than 20!");
         chunks = follow_chunks.chunks(1).collect::<Vec<_>>();
     } else {
         chunks = follow_chunks.chunks(len / 20).collect::<Vec<_>>();
@@ -381,7 +382,9 @@ async fn write_follows(
             .with_max_elapsed_time(Some(Duration::from_millis(10000)))
             .build(),
         || async {
-            let i: Vec<Query> = qrys.iter().map(|v| v.clone()).collect();
+            let i: Vec<Query> = qrys.iter().map(|v| {
+                v.clone()
+            }).collect();
             let ilen = &i.len();
             let mut tx = conn_cl.start_txn().await.unwrap();
             match tx.run_queries(i).await {
