@@ -1,6 +1,4 @@
-use bytes::BytesMut;
 use common::FetchMessage;
-use fastwebsockets::{Frame, OpCode, Payload};
 use graph::GraphModel;
 use pprof::protos::Message;
 use simple_moving_average::{SumTreeSMA, SMA};
@@ -161,6 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 Ok((drift, recv_chan)) => {
                                     if drift > 10000 || drift < 0 {
                                         info!("Weird Drift: {}ms", drift);
+                                        panic!()
                                     }
                                     ctr.lock().await.add_sample(drift);
                                     last_time = SystemTime::now();
