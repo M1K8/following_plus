@@ -104,30 +104,21 @@ pub async fn listen_channel(
         let seen_map = seen_map.clone();
 
         let bl_seen_map = seen_map.clone();
-        seen_map.insert(did.clone());
         match get_follows(&did, cl_follows).await {
             Ok(follows) => {
                 tokio::spawn(async move {
-                    info!(
-                        "Recursively fetching {} follows for {did}",
-                        follows.len()
-                    );
+                    info!("Recursively fetching {} follows for {did}", follows.len());
 
                     let all_follows = Arc::new(DashSet::new());
                     if !seen_map.contains(&did) {
                         follows.iter().for_each(|f| {
-                            info!("adding {} {} {}", f.0, f.1, &did);
                             all_follows.insert((f.0.clone(), f.1.clone(), did.clone()));
                         });
                     }
 
-                    // split into 12 chunks
-                    // spin off 12 fetcher threads
-                    // the join on them
                     let mut set = JoinSet::new();
                     let all_followers_chunks: Vec<&[(String, String)]> =
                         follows.chunks(follows.len() / 12).collect();
-                    info!("There are {} chunks", all_followers_chunks.len());
                     for idx in 0..all_followers_chunks.len() {
                         let mut c = match all_followers_chunks.get(idx) {
                             Some(c) => *c,
@@ -154,11 +145,11 @@ pub async fn listen_channel(
                                 cl_2nd_follows = cl_2nd_follows.timeout(Duration::from_secs(10));
                                 let cl_2nd_follows = cl_2nd_follows.build().unwrap();
                                 match get_follows(&did, cl_2nd_follows).await {
-                                    Ok(f) => {
-                                        f.iter().for_each(|f| {
+                                    Ok(mut f) => {
+                                        f.iter_mut().for_each(|f| {
                                             all_follows.insert((
-                                                f.0.clone(),
-                                                f.1.clone(),
+                                                mem::take(&mut f.0),
+                                                mem::take(&mut f.1),
                                                 did.clone(),
                                             ));
                                         });
@@ -176,17 +167,15 @@ pub async fn listen_channel(
                         });
                     }
                     set.join_all().await;
-
+                    info!("There are {} chunks", all_followers_chunks.len());
                     info!(
                         "Done Recursively fetching {} for {did}; writing...",
                         follows.len()
                     );
+                    seen_map.insert(did.clone());
 
                     match write_follows(all_follows, &second_deg_conn, lock).await {
-                        Some(e) => warn!(
-                            "Error writing 2nd degree follows for {did}: {:?}",
-                            e
-                        ),
+                        Some(e) => warn!("Error writing 2nd degree follows for {did}: {:?}", e),
                         None => {}
                     }
                 });
@@ -294,13 +283,12 @@ pub async fn listen_channel(
 async fn get_follows(
     did_follows: &String,
     cl_follows: reqwest::Client,
-) -> Result<Arc<Vec<(String, String)>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
     let follows = match bsky::get_follows(did_follows.clone(), cl_follows).await {
         Ok(f) => f,
         Err(e) => return Err(Box::new(e)),
     };
 
-    let follows = Arc::new(follows);
     Ok(follows)
 }
 
@@ -363,7 +351,6 @@ async fn write_follows(
     let len = follow_chunks.len();
     let chunks;
     if len < 20 as usize {
-        warn!("Less than 20!");
         chunks = follow_chunks.chunks(1).collect::<Vec<_>>();
     } else {
         chunks = follow_chunks.chunks(len / 20).collect::<Vec<_>>();
@@ -382,9 +369,7 @@ async fn write_follows(
             .with_max_elapsed_time(Some(Duration::from_millis(10000)))
             .build(),
         || async {
-            let i: Vec<Query> = qrys.iter().map(|v| {
-                v.clone()
-            }).collect();
+            let i: Vec<Query> = qrys.iter().map(|v| v.clone()).collect();
             let ilen = &i.len();
             let mut tx = conn_cl.start_txn().await.unwrap();
             match tx.run_queries(i).await {
