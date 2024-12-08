@@ -169,6 +169,10 @@ pub async fn listen_channel(
                                         seen_map.insert(did.clone());
                                     }
                                     Err(e) => {
+                                        if !e.is::<RecNotFound>() {
+                                            seen_map.insert(did.clone()); // this aint ever gonna work, so ignore it
+                                            continue;
+                                        }
                                         warn!(
                                             "Error getting 2nd degree follows for {did}: {:?}",
                                             e
@@ -338,13 +342,36 @@ async fn fetch_posts(
     Ok(())
 }
 
+#[derive(Debug)]
+struct RecNotFound {}
+
+impl std::fmt::Display for RecNotFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RecNotFound")
+    }
+}
+
+impl core::error::Error for RecNotFound {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
+    }
+}
 async fn get_follows(
     did_follows: &String,
     cl_follows: reqwest::Client,
 ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
     let follows = match bsky::get_follows(did_follows.clone(), cl_follows).await {
         Ok(f) => f,
-        Err(e) => return Err(Box::new(e)),
+        Err(e) => {
+            let err_str = format!("{:?}", e);
+            if err_str.contains("missing field `records`") {
+                return Err(Box::new(RecNotFound {}));
+            }
+            return Err(Box::new(e));
+        }
     };
 
     Ok(follows)
