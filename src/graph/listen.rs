@@ -312,7 +312,7 @@ async fn fetch_posts(
     for v in res_vec.iter() {
         info!("Adding {:?}", v);
     }
-    let latest_ts ;
+    let latest_ts;
     if let Some(val) = res_vec.last() {
         latest_ts = Some(val.timestamp.to_string());
     } else {

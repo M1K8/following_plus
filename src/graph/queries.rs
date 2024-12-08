@@ -250,15 +250,9 @@ MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
 
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
-WITH u, b, p, CASE WHEN b IS NULL 
+WITH u, b, p, toInteger(p.timestamp) AS ts, CASE WHEN b IS NULL 
   THEN p ELSE NULL END as post
-WHERE post IS NOT NULL
-// Filter off posts from blocked users
-
-WITH *, toInteger(p.timestamp) AS ts
-WHERE ts < {}
-
-
+WHERE post IS NOT NULL AND ts < {}
 
 RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply,  ts ORDER BY ts DESC LIMIT 20
 "#;
@@ -277,11 +271,9 @@ MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
 
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
-WITH u, b, p, CASE WHEN b IS NULL 
+WITH u, b, p, toInteger(p.timestamp) AS ts,  CASE WHEN b IS NULL 
   THEN p ELSE NULL END as post
-WHERE post IS NOT NULL
-// Filter off posts from blocked users
-WHERE ts < {}
+WHERE post IS NOT NULL AND ts < {}
 
 RETURN u.did AS user, p.rkey AS url, p.isReply AS isReply, ts ORDER BY ts DESC LIMIT 20
 "#;
