@@ -319,7 +319,7 @@ async fn fetch_posts(
     } else {
         latest_ts = None;
     }
-    info!("Cursor is {latest_ts}");
+    info!("Cursor is {:?}", latest_ts);
 
     match msg
         .resp
