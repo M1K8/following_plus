@@ -125,7 +125,7 @@ pub async fn listen_channel(
                             all_follows.insert((f.0.clone(), f.1.clone(), did.clone()));
                         });
                     }
-
+                    seen_map.insert(did.clone());
                     let mut set = JoinSet::new();
                     let all_followers_chunks: Vec<&[(String, String)]> =
                         follows.chunks(follows.len() / 12).collect();
@@ -183,7 +183,6 @@ pub async fn listen_channel(
                         "Done Recursively fetching {} for {did}; writing...",
                         follows.len()
                     );
-                    seen_map.insert(did.clone());
 
                     match write_follows(all_follows, &second_deg_conn, lock).await {
                         Some(e) => warn!("Error writing 2nd degree follows for {did}: {:?}", e),
