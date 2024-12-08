@@ -3,8 +3,8 @@ use crate::graph::GraphModel;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 
+use std::collections::HashSet;
 use std::mem;
-use std::{collections::HashSet, fmt::Debug};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use zstd::bulk::Decompressor;

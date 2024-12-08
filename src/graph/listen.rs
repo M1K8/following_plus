@@ -98,6 +98,7 @@ pub async fn listen_channel(
             cursor = cur.unwrap();
             info!("cursor is {cursor}");
         } else {
+            warn!("NO CURSOR!");
             cursor = now();
         }
 
