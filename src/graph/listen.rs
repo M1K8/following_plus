@@ -42,7 +42,7 @@ macro_rules! process_next {
                 }
             },
             Err(e) => {
-                info!("{:?}", e);
+                warn!("{:?}", e);
                 break;
             }
         }
@@ -96,6 +96,7 @@ pub async fn listen_channel(
         if msg.cursor.is_some() {
             let cur = mem::take(&mut msg.cursor);
             cursor = cur.unwrap();
+            info!("cursor is {cursor}");
         } else {
             cursor = now();
         }
@@ -116,6 +117,7 @@ pub async fn listen_channel(
 
         match get_follows(&did, cl_follows).await {
             Ok(follows) => {
+                // TODO - Have map of currently fetching users to prevent replay
                 tokio::spawn(async move {
                     info!("Recursively fetching {} follows for {did}", follows.len());
 
@@ -317,6 +319,7 @@ async fn fetch_posts(
     } else {
         latest_ts = None;
     }
+    info!("Cursor is {latest_ts}");
 
     match msg
         .resp
