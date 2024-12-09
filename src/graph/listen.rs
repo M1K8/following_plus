@@ -61,9 +61,9 @@ pub async fn listen_channel(
 
     let in_flight = Arc::new(DashSet::new());
     //let mut cached = HashMap::<String, Vec<PostMsg>>::new();
-
     let seen_map = Arc::new(DashSet::new());
     loop {
+        let in_flight_loop = in_flight.clone();
         let mut msg = match recv.recv().await {
             Some(s) => s,
             None => continue,
@@ -90,13 +90,13 @@ pub async fn listen_channel(
             };
             continue;
         }
-        if in_flight.contains(&msg.did) {
+        if in_flight_loop.contains(&msg.did) {
             continue;
             //TODO - Return whatever is in the cache
             // TODO - cache: k uid_cursor v: vec<postmsg>
         }
         info!("Got event for {:?}", msg.did);
-        in_flight.insert(msg.did.clone());
+        in_flight_loop.insert(msg.did.clone());
         let cursor;
         if msg.cursor.is_some() {
             let cur = mem::take(&mut msg.cursor);
@@ -203,7 +203,7 @@ pub async fn listen_channel(
                         Some(e) => warn!("Error writing 2nd degree follows for {did}: {:?}", e),
                         None => {}
                     }
-                    in_flight.remove(&did);
+                    in_flight_loop.remove(&did);
                 });
             }
             Err(e) => {
