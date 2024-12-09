@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use std::{env, mem, process};
 use std::{fs::File, io::Write, thread};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber;
 
 pub mod bsky;
@@ -170,6 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             )
                                             .as_str();
                                         // switch to jetstream2
+                                        warn!("{nu_url}");
                                         ws = match ws::connect(
                                             "jetstream2.us-east.bsky.network",
                                             nu_url,
