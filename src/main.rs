@@ -159,7 +159,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 Ok((drift, recv_chan)) => {
                                     if drift > 10000 || drift < 0 {
                                         info!("Weird Drift: {}ms", drift);
-                                        panic!()
+                                        info!("Reconnecting to Bluesky firehose");
+                                        let nu_url = url.clone()
+                                            + format!(
+                                                "&cursor={}",
+                                                &last_time
+                                                    .duration_since(SystemTime::UNIX_EPOCH)
+                                                    .unwrap()
+                                                    .as_micros()
+                                            )
+                                            .as_str();
+                                        // switch to jetstream2
+                                        ws = match ws::connect(
+                                            "jetstream2.us-east.bsky.network",
+                                            nu_url,
+                                        )
+                                        .await
+                                        {
+                                            Ok(ws) => ws,
+                                            Err(e) => {
+                                                info!("Error reconnecting to firehose: {}", e);
+                                                continue 'outer;
+                                            }
+                                        };
+                                        info!("Reconnected to Bluesky firehose");
                                     }
                                     ctr.lock().await.add_sample(drift);
                                     last_time = SystemTime::now();

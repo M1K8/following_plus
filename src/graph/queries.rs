@@ -69,6 +69,13 @@ MERGE (v:User {did: follow.out})
 CREATE (u)-[r:FOLLOWS {rkey: follow.rkey }]->(v)
 "#;
 
+pub(crate) const POPULATE_FOLLOW: &str = r#"
+UNWIND $follows as follow
+MERGE (u:User {did: follow.did})
+MERGE (v:User {did: follow.out})
+MERGE (u)-[r:FOLLOWS {rkey: follow.rkey }]->(v)
+"#;
+
 pub(crate) const ADD_BLOCK: &str = r#"
 UNWIND $blocks as block
 MERGE (u:User {did: block.did})

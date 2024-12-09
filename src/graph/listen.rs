@@ -444,7 +444,7 @@ async fn write_follows(
 
     let mut qrys = Vec::new();
     for follow_chunk in chunks {
-        let qry = neo4rs::query(queries::ADD_FOLLOW).param("follows", follow_chunk);
+        let qry = neo4rs::query(queries::POPULATE_FOLLOW).param("follows", follow_chunk);
         qrys.push(qry);
     }
     let conn_cl = conn.clone();
