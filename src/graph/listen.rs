@@ -59,8 +59,7 @@ pub async fn listen_channel(
     client = client.timeout(Duration::from_secs(10));
     let client = client.build().unwrap();
 
-    // k: did, v: uint post index
-    // TODO - Write here & fetch further back if scrolled; dup queries w/ timestamp gate (format!'d)
+    let in_flight = DashSet::new();
     //let mut cached = HashMap::<String, Vec<PostMsg>>::new();
 
     let seen_map = Arc::new(DashSet::new());
@@ -85,13 +84,19 @@ pub async fn listen_channel(
             {
                 Ok(_) => {}
                 Err(e) => {
-                    warn!("Error sending posts back for{}: {}", &msg.did, e);
+                    warn!("Error sending empty did resp back for{}: {}", &msg.did, e);
                     continue;
                 }
             };
             continue;
         }
+        if in_flight.contains(&msg.did) {
+            continue;
+            //TODO - Return whatever is in the cache
+            // TODO - cache: k uid_cursor v: vec<postmsg>
+        }
         info!("Got event for {:?}", msg.did);
+        in_flight.insert(msg.did.clone());
         let cursor;
         if msg.cursor.is_some() {
             let cur = mem::take(&mut msg.cursor);

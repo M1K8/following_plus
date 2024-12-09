@@ -118,7 +118,7 @@ pub struct Ref {
 #[serde(rename_all = "camelCase")]
 pub struct Embed {
     #[serde(rename = "$type")]
-    pub type_field: String,
+    pub type_field: Option<String>,
     pub uri: Option<String>,
     pub embedded: Option<Embd>,
     pub external: Option<External>,
