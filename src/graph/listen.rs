@@ -245,7 +245,9 @@ async fn fetch_and_return_posts(
 ) -> Result<(), Box<dyn error::Error>> {
     let mut res_vec = Vec::new();
     let mut cursor = time.clone();
-    while res_vec.len() < 30 {
+    let mut first_time = false;
+    while res_vec.len() < 30 && !first_time {
+        // if the first call returns nothing, then we've reached the end
         if let Ok(posts) = fetch_posts(&msg, read_conn, &cursor).await {
             for p in posts.iter() {
                 res_vec.push(p.value().clone());
@@ -257,6 +259,7 @@ async fn fetch_and_return_posts(
                 break;
             }
             info!("Cursor is {:?}", cursor);
+            first_time = true;
         }
     }
 

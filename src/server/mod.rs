@@ -57,7 +57,7 @@ async fn index(
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
     State(state): State<Arc<StateStruct>>,
 ) -> Result<Json<types::Response>, axum::http::StatusCode> {
-    let iss = match bearer {
+    let did = match bearer {
         Some(s) => {
             let s = decode(s.0 .0.token()).unwrap().into_owned();
             auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
@@ -67,7 +67,7 @@ async fn index(
             return Err(axum::http::StatusCode::NOT_FOUND);
         }
     };
-    info!("user id {}", iss);
+    info!("user id {}", did);
     let cursor;
     if let Some(c) = params.get("cursor") {
         cursor = Some(c.clone());
@@ -76,14 +76,10 @@ async fn index(
         cursor = None;
     }
 
-    let (send, mut recv) = tokio::sync::mpsc::channel(1);
+    let (resp, mut recv) = tokio::sync::mpsc::channel(1);
     state
         .send_chan
-        .send(FetchMessage {
-            did: iss,
-            cursor: cursor,
-            resp: send,
-        })
+        .send(FetchMessage { did, cursor, resp })
         .await
         .unwrap();
 
