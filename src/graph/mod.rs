@@ -2,11 +2,11 @@ use crate::common::FetchMessage;
 use backoff::future::retry;
 use backoff::{Error, ExponentialBackoffBuilder};
 use dashmap::DashMap;
-use neo4rs::{ConfigBuilder, Graph, Query};
-use std::env;
+use neo4rs::{Config, ConfigBuilder, Graph, Query};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, time::Instant};
+use std::{env, mem};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
@@ -17,6 +17,7 @@ mod util;
 
 pub struct GraphModel {
     inner: Graph,
+    config: Config,
     like_queue: Vec<HashMap<String, String>>,
     post_queue: Vec<HashMap<String, String>>,
     reply_queue: Vec<HashMap<String, String>>,
@@ -38,7 +39,7 @@ const TX_Q_LEN: usize = 75;
 
 impl GraphModel {
     pub async fn enqueue_query(
-        &self,
+        &mut self,
         name: String,
         qry: neo4rs::Query,
         prev_recv: Option<mpsc::Receiver<()>>,
@@ -120,6 +121,11 @@ impl GraphModel {
         prev_recv
     }
 
+    pub async fn reset_connection(&mut self) -> Result<(), neo4rs::Error> {
+        self.inner = Graph::connect(self.config.clone()).await?;
+        Ok(())
+    }
+
     pub async fn new(
         uri: &str,
         replica_uri: &str,
@@ -134,7 +140,7 @@ impl GraphModel {
             info!("Connecting to replica first");
             let replica_cfg = ConfigBuilder::new()
                 .uri(replica_uri)
-                .fetch_size(2048)
+                .fetch_size(8192)
                 .user(user)
                 .password(pass)
                 .db("memgraph")
@@ -187,14 +193,14 @@ impl GraphModel {
             info!("Done!\nConnecting to main...");
         }
 
-        let cfg = ConfigBuilder::new()
+        let config = ConfigBuilder::new()
             .uri(uri)
-            .fetch_size(2048)
+            .fetch_size(8192)
             .user(user)
             .password(pass)
             .db("memgraph")
             .build()?;
-        let inner = Graph::connect(cfg).await?;
+        let inner = Graph::connect(config.clone()).await?;
         inner
             .run(neo4rs::query("CREATE INDEX ON :User(did)"))
             .await?;
@@ -249,6 +255,7 @@ impl GraphModel {
         });
         let res = Self {
             inner,
+            config,
             tx_queue: Arc::new(DashMap::new()),
             like_queue: Default::default(),
             post_queue: Default::default(),

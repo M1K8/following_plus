@@ -125,13 +125,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let mut last_time = SystemTime::now();
     let mut recv: Option<mpsc::Receiver<()>> = None; // Has to be an option otherwise mem::take wont work (bc it implements default())
+                                                     //TODO - If it looks like we're stalled on memgraph, disconnect from the DB & reconn (probably by adding a select to enqueue_query & having it call an internal method to reset)
     'outer: loop {
         while let Ok(msg) = tokio::select! {
             msg = ws.read_frame() => {
                 msg
             }
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => {
-                info!("Reconnecting to Bluesky firehose");
+                info!("Reconnecting to Bluesky firehose (& memgraph)");
                 let nu_url = url.clone() + format!("&cursor={}",&last_time.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_micros()).as_str();
                 ws = match ws::connect("jetstream1.us-east.bsky.network", nu_url).await{
                     Ok(ws) => {
@@ -144,6 +145,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
                 info!("Reconnected to Bluesky firehose");
                 let m = ws.read_frame().await;
+
+                graph.reset_connection().await.unwrap();
+
+
                 info!("We good");
                 m
             }
