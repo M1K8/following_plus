@@ -155,6 +155,8 @@ pub async fn listen_channel(
                                     continue;
                                 }
 
+                                
+                                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                                 let mut cl_2nd_follows = reqwest::ClientBuilder::new();
                                 cl_2nd_follows = cl_2nd_follows.timeout(Duration::from_secs(10));
                                 let cl_2nd_follows = cl_2nd_follows.build().unwrap();
@@ -343,23 +345,7 @@ async fn fetch_posts(
     Ok(())
 }
 
-#[derive(Debug)]
-struct RecNotFound {}
 
-impl std::fmt::Display for RecNotFound {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RecNotFound")
-    }
-}
-
-impl core::error::Error for RecNotFound {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
 async fn get_follows(
     did_follows: &String,
     cl_follows: reqwest::Client,
@@ -368,7 +354,7 @@ async fn get_follows(
         Ok(f) => f,
         Err(e) => {
             let err_str = format!("{:?}", e);
-            if err_str.contains("missing field `records`") {
+            if err_str.contains("missing field `records`") && e.status().unwrap().as_u16() != 429 {
                 return Err(Box::new(RecNotFound {}));
             }
             return Err(Box::new(e));
@@ -490,4 +476,23 @@ async fn write_follows(
     }
     info!("Done!");
     None
+}
+
+
+#[derive(Debug)]
+struct RecNotFound {}
+
+impl std::fmt::Display for RecNotFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RecNotFound")
+    }
+}
+
+impl core::error::Error for RecNotFound {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
+    }
 }
