@@ -22,7 +22,7 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
         Some(p) => p,
         None => panic!("Decompressor is undefined?"),
     };
-    let msg = dec_ptr.decompress(m, 409600); // 40kb
+    let msg = dec_ptr.decompress(m, 819200); // 80kb
     match msg {
         Ok(m) => {
             match serde_json::from_slice(m.as_slice()) {

@@ -3,10 +3,10 @@ use backoff::future::retry;
 use backoff::{Error, ExponentialBackoffBuilder};
 use dashmap::DashMap;
 use neo4rs::{Config, ConfigBuilder, Graph, Query};
+use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, time::Instant};
-use std::env;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
@@ -65,7 +65,8 @@ impl GraphModel {
                     || async {
                         let q_vals: Vec<Query> = queue.iter().map(|v| v.value().clone()).collect();
                         let mut tx = inner.start_txn().await.unwrap();
-                        match tx.run_queries(q_vals).await { //TOTO - Select for timeouts here
+                        match tx.run_queries(q_vals).await {
+                            //TOTO - Select for timeouts here
                             Ok(_) => {
                                 let el: u128 = n.elapsed().as_millis();
                                 if el > 200 {
