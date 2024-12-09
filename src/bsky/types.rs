@@ -59,7 +59,7 @@ pub struct Record {
     pub subject: Option<Subj>,
     pub lang: Option<String>,
     pub langs: Option<Vec<String>>,
-    pub facets: Option<Facet>,
+    pub facets: Option<Vec<Facet>>,
     pub text: Option<String>,
     pub reply: Option<Reply>,
     pub embed: Option<Embed>,
@@ -121,6 +121,15 @@ pub struct Embed {
     pub type_field: String,
     pub uri: Option<String>,
     pub embedded: Option<Embd>,
+    pub external: Option<External>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct External {
+    pub title: Option<String>,
+    pub uri: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
