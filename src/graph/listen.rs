@@ -237,11 +237,12 @@ async fn fetch_posts(
 ) -> Result<(), Box<dyn error::Error>> {
     // Fetch posts
     warn!("Time is {time}");
-    let sss = queries::GET_BEST_2ND_DEG_LIKES
-        .to_string()
-        .replace("{}", &time);
-    info!("{sss}");
-    let qry1 = neo4rs::query(&sss).param("did", msg.did.clone());
+    let qry1 = neo4rs::query(
+        &queries::GET_BEST_2ND_DEG_LIKES
+            .to_string()
+            .replace("{}", &time),
+    )
+    .param("did", msg.did.clone());
     let qry2 = neo4rs::query(
         &queries::GET_BEST_2ND_DEG_REPOSTS
             .to_string()

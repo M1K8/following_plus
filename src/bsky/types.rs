@@ -59,6 +59,7 @@ pub struct Record {
     pub subject: Option<Subj>,
     pub lang: Option<String>,
     pub langs: Option<Vec<String>>,
+    pub facets: Option<Facet>,
     pub text: Option<String>,
     pub reply: Option<Reply>,
     pub embed: Option<Embed>,
@@ -67,10 +68,32 @@ pub struct Record {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Facet {
+    pub index: Option<Index>,
+    pub features: Option<Vec<Feature>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Index {
+    pub byte_start: u64,
+    pub byte_end: u64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Feature {
+    #[serde(rename = "$type")]
+    pub type_field: String,
+    pub uri: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Image {
     pub alt: Option<String>,
     pub aspect_ratio: Option<HashMap<String, String>>,
-    pub image: ImageInternal,
+    pub image: Option<ImageInternal>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
