@@ -59,7 +59,7 @@ pub async fn listen_channel(
     client = client.timeout(Duration::from_secs(10));
     let client = client.build().unwrap();
 
-    let in_flight = DashSet::new();
+    let in_flight = Arc::new(DashSet::new());
     //let mut cached = HashMap::<String, Vec<PostMsg>>::new();
 
     let seen_map = Arc::new(DashSet::new());
@@ -203,6 +203,7 @@ pub async fn listen_channel(
                         Some(e) => warn!("Error writing 2nd degree follows for {did}: {:?}", e),
                         None => {}
                     }
+                    in_flight.remove(&did);
                 });
             }
             Err(e) => {
