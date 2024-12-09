@@ -30,10 +30,9 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
                 };
 
                 let mut tx = conn.start_txn().await.unwrap();
-
+                let lock = lock.write().await;
                 match tx.run_queries(vec![qry, qry2]).await {
                     Ok(_) => {
-                        let lock = lock.write().await;
                         let res = match tx.commit().await {
                             Ok(_) => Ok(()),
                             Err(e) => Err(Error::Transient {
@@ -41,7 +40,6 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
                                 retry_after: None,
                             }),
                         };
-                        drop(lock);
                         res
                     }
                     Err(e) => Err(Error::Transient {
@@ -58,6 +56,7 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
                 warn!("Error on purge query: {}", e);
             }
         };
+        drop(lock);
         info!("Done!");
     }
 }
