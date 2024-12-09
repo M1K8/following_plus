@@ -15,7 +15,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::info;
+use tracing::{info, warn};
 use urlencoding::decode;
 mod auth;
 pub mod types;
@@ -53,7 +53,7 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
 
 async fn index(
     _headers: HeaderMap,
-    Query(_params): Query<HashMap<String, String>>,
+    Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
     State(state): State<Arc<StateStruct>>,
 ) -> Result<Json<types::Response>, axum::http::StatusCode> {
@@ -68,13 +68,20 @@ async fn index(
         }
     };
     info!("user id {}", iss);
+    let cursor;
+    if let Some(c) = params.get("cursor") {
+        cursor = Some(c.clone());
+    } else {
+        warn!("No Cursor!");
+        cursor = None;
+    }
 
     let (send, mut recv) = tokio::sync::mpsc::channel(1);
     state
         .send_chan
         .send(FetchMessage {
             did: iss,
-            cursor: None, //TODO - From Params (and likely handled here anyway)
+            cursor: cursor,
             resp: send,
         })
         .await
