@@ -68,7 +68,7 @@ pub struct Record {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Image {
-    pub alt: String,
+    pub alt: Option<String>,
     pub aspect_ratio: Option<HashMap<String, String>>,
     pub image: ImageInternal,
 }
