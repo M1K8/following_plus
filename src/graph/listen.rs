@@ -171,14 +171,16 @@ pub async fn listen_channel(
                                         seen_map.insert(did.clone());
                                     }
                                     Err(e) => {
-                                        if !e.is::<RecNotFound>() {
+                                        if e.is::<RecNotFound>() {
                                             seen_map.insert(did.clone()); // this aint ever gonna work, so ignore it
-                                            continue;
+                                            info!("{did} probably doesnt exist on this PDS, skipping...")
+                                        } else {
+                                            warn!(
+                                                "Error getting 2nd degree follows for {did}: {:?}",
+                                                e
+                                            );
                                         }
-                                        warn!(
-                                            "Error getting 2nd degree follows for {did}: {:?}",
-                                            e
-                                        );
+
                                         continue;
                                     }
                                 };
@@ -215,7 +217,7 @@ pub async fn listen_channel(
                 }
             };
         }
-        match fetch_posts(msg, &read_conn, cursor).await {
+        match fetch_and_return_posts(msg, &read_conn, &cursor).await {
             Ok(_) => {}
             Err(_) => continue,
         }
@@ -230,11 +232,67 @@ fn now() -> String {
         .to_string()
 }
 
-async fn fetch_posts(
+async fn fetch_and_return_posts(
     msg: FetchMessage,
     read_conn: &Graph,
-    time: String,
+    time: &String,
 ) -> Result<(), Box<dyn error::Error>> {
+    let mut res_vec = Vec::new();
+    let mut cursor = time.clone();
+    while res_vec.len() < 30 {
+        if let Ok(posts) = fetch_posts(&msg, read_conn, &cursor).await {
+            for p in posts.iter() {
+                res_vec.push(p.value().clone());
+            }
+
+            if let Some(val) = res_vec.last() {
+                cursor = val.timestamp.to_string();
+            } else {
+                break;
+            }
+            info!("Cursor is {:?}", cursor);
+        }
+    }
+
+    //TODO - Cache these
+    if res_vec.len() > 30 {
+        info!("Response is > 30; pls cache xx");
+    }
+
+    let c;
+    if res_vec.len() == 0 {
+        c = None;
+    } else {
+        c = Some(cursor);
+    }
+
+    res_vec.sort_unstable();
+    for v in res_vec.iter() {
+        info!("Adding {:?}", v);
+    }
+
+    match msg
+        .resp
+        .send(PostResp {
+            posts: res_vec,
+            cursor: c,
+        })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            warn!("Error replying to post request for {}: {:?}", msg.did, e);
+            return Err(Box::new(e));
+        }
+    };
+    Ok(())
+}
+
+async fn fetch_posts(
+    msg: &FetchMessage,
+    read_conn: &Graph,
+    time: &String,
+) -> Result<Arc<DashMap<String, PostMsg>>, Box<dyn error::Error>> {
     // Fetch posts
     warn!("Time is {time}");
     let qry1 = neo4rs::query(
@@ -309,40 +367,8 @@ async fn fetch_posts(
             return Err(Box::new(e));
         }
     }
-    let mut res_vec = Vec::new();
-    let mut _ctr = 0;
-    for p in posts.iter() {
-        res_vec.push(p.value().clone());
-    }
 
-    res_vec.sort_unstable();
-    info!("Adding {:?}", res_vec.len());
-    for v in res_vec.iter() {
-        info!("Adding {:?}", v);
-    }
-    let latest_ts;
-    if let Some(val) = res_vec.last() {
-        latest_ts = Some(val.timestamp.to_string());
-    } else {
-        latest_ts = None;
-    }
-    info!("Cursor is {:?}", latest_ts);
-
-    match msg
-        .resp
-        .send(PostResp {
-            posts: res_vec,
-            cursor: latest_ts,
-        })
-        .await
-    {
-        Ok(_) => {}
-        Err(e) => {
-            warn!("Error replying to post request for {}: {:?}", msg.did, e);
-            return Err(Box::new(e));
-        }
-    };
-    Ok(())
+    Ok(posts)
 }
 
 async fn get_follows(
