@@ -155,7 +155,6 @@ pub async fn listen_channel(
                                     continue;
                                 }
 
-                                
                                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                                 let mut cl_2nd_follows = reqwest::ClientBuilder::new();
                                 cl_2nd_follows = cl_2nd_follows.timeout(Duration::from_secs(10));
@@ -345,7 +344,6 @@ async fn fetch_posts(
     Ok(())
 }
 
-
 async fn get_follows(
     did_follows: &String,
     cl_follows: reqwest::Client,
@@ -477,7 +475,6 @@ async fn write_follows(
     info!("Done!");
     None
 }
-
 
 #[derive(Debug)]
 struct RecNotFound {}

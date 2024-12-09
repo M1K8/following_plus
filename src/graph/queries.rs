@@ -11,6 +11,7 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(PURGE_TIME)).await;
         info!("Purging & analyzing");
+        let lock = lock.write().await;
         match retry(
             // this'll only take effect when getting new accounts or pruging
             // TODO - Purging is still failing - take another look at the locking logic & make sure its putting a stopper (very possible that ongoing transactions are still running)
@@ -30,7 +31,6 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
                 };
 
                 let mut tx = conn.start_txn().await.unwrap();
-                let lock = lock.write().await;
                 match tx.run_queries(vec![qry, qry2]).await {
                     Ok(_) => {
                         let res = match tx.commit().await {
