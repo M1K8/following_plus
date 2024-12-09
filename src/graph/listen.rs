@@ -352,7 +352,7 @@ async fn get_follows(
         Ok(f) => f,
         Err(e) => {
             let err_str = format!("{:?}", e);
-            if err_str.contains("missing field `records`") && e.status().unwrap().as_u16() != 429 {
+            if err_str.contains("missing field `records`") && !err_str.contains("429`") {
                 return Err(Box::new(RecNotFound {}));
             }
             return Err(Box::new(e));
