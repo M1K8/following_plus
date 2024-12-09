@@ -6,7 +6,7 @@ use neo4rs::{Config, ConfigBuilder, Graph, Query};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, time::Instant};
-use std::{env, mem};
+use std::env;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
@@ -35,7 +35,7 @@ pub struct GraphModel {
     tx_queue: Arc<DashMap<String, Query>>,
 }
 
-const TX_Q_LEN: usize = 75;
+const TX_Q_LEN: usize = 70;
 
 impl GraphModel {
     pub async fn enqueue_query(
@@ -65,7 +65,7 @@ impl GraphModel {
                     || async {
                         let q_vals: Vec<Query> = queue.iter().map(|v| v.value().clone()).collect();
                         let mut tx = inner.start_txn().await.unwrap();
-                        match tx.run_queries(q_vals).await {
+                        match tx.run_queries(q_vals).await { //TOTO - Select for timeouts here
                             Ok(_) => {
                                 let el: u128 = n.elapsed().as_millis();
                                 if el > 200 {

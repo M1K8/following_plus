@@ -5,7 +5,7 @@ use crate::graph::util;
 use std::collections::HashMap;
 use std::mem;
 
-pub const Q_LIMIT: usize = 60;
+pub const Q_LIMIT: usize = 55;
 
 macro_rules! add_to_queue {
     ($query_name:expr, $recv:ident, $self:ident, $( $arg:ident ),+) => {{
