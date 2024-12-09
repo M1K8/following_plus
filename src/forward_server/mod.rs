@@ -15,7 +15,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use std::{collections::HashMap, env, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::info;
+use tracing::{error, info};
 
 use crate::server::types;
 mod auth;
@@ -65,7 +65,7 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn forward(
-    Query(_params): Query<HashMap<String, String>>,
+    Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
     State(state): axum::extract::State<Arc<StateStruct>>,
 ) -> Response<Body> {
@@ -94,16 +94,14 @@ async fn forward(
     let resp = match state
         .client
         .request(reqwest::Method::GET, state.edpt.as_str())
+        .query(&params)
         .bearer_auth(tok)
         .send()
         .await
     {
         Ok(r) => r,
         Err(e) => {
-            info!("builder err: {}", e.is_builder());
-            info!("body err: {}", e.is_body());
-            info!("req: {}", e.is_request());
-            info!("Error: {}", e.to_string());
+            error!("{:?}", e.to_string());
             return Response::builder()
                 .status(403)
                 .body(Body::from(e.to_string()))
