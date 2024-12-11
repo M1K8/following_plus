@@ -14,7 +14,6 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
         let lock = lock.write().await;
         match retry(
             // this'll only take effect when getting new accounts or pruging
-            // TODO - Purging is still failing - take another look at the locking logic & make sure its putting a stopper (very possible that ongoing transactions are still running)
             ExponentialBackoffBuilder::default()
                 .with_initial_interval(Duration::from_millis(50))
                 .with_max_elapsed_time(Some(Duration::from_millis(10000)))

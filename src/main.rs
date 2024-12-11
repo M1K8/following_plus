@@ -1,6 +1,7 @@
 use common::FetchMessage;
 use graph::GraphModel;
 use pprof::protos::Message;
+use rustls::crypto::CryptoProvider;
 use simple_moving_average::{SumTreeSMA, SMA};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -12,63 +13,25 @@ use tracing_subscriber;
 
 pub mod bsky;
 pub mod common;
-mod forward_server;
 pub mod graph;
 mod server;
 mod ws;
 
-//RUSTFLAGS="-Cprofile-generate=./pgo-data"     cargo build --release --target=x86_64-unknown-linux-gnu
 /// Override the global allocator with mimalloc
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
     tracing_subscriber::fmt::init();
 
-    if !env::var("PROFILE_ENABLE").unwrap_or("".into()).is_empty() {
-        let guard = pprof::ProfilerGuardBuilder::default()
-            .frequency(1000)
-            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
-            .build()
-            .unwrap();
-
-        ctrlc::set_handler(move || {
-            info!("Shutting down");
-            match guard.report().build() {
-                Ok(report) => {
-                    let mut file = File::create("profile.pb").unwrap();
-                    let profile = report.pprof().unwrap();
-
-                    let mut content = Vec::new();
-                    profile.write_to_vec(&mut content).unwrap();
-                    file.write_all(&content).unwrap();
-                }
-                Err(_) => {}
-            };
-            //TODO Exit properly
-            process::exit(0x0100);
-        })
-        .expect("Error setting Ctrl-C handler");
-    }
-
-    let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
-    let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
-
     // todo - this properly
     let user = env::var("MM_USER").unwrap_or("user".into());
     let pw = env::var("MM_PW").unwrap_or("pass".into());
-
-    // If env says we need to forward DB requests, just do that & nothing else
-    if !forward_mode.is_empty() {
-        info!("Starting forward web server");
-        forward_server::serve(forward_mode).await.unwrap();
-        info!("Exiting forward web server");
-        return Ok(());
-    }
 
     let lock = Arc::new(RwLock::new(()));
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
@@ -84,23 +47,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await
     .unwrap();
     info!("Connected to memgraph");
-
-    // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
-    thread::spawn(move || {
-        let web_runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(16)
-            .build()
-            .unwrap();
-
-        info!("Starting web listener thread");
-        let wait = web_runtime.spawn(async move {
-            server::serve(send).await.unwrap();
-        });
-        web_runtime.block_on(wait).unwrap();
-        info!("Exiting web listener thread");
-    });
-    //
 
     // Connect to the websocket
     info!("Connecting to Bluesky firehose");
@@ -218,7 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let e = ws.read_frame().await;
         match e {
             Ok(_) => info!("Were ok?"),
-            Err(e) => error!("Err: {e}"),
+            Err(e) => {
+                ws = ws::connect("jetstream2.us-east.bsky.network", url2.clone()).await?;
+                error!("Err: {e}")
+            }
         };
     }
 }

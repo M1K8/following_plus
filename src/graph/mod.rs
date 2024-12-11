@@ -10,7 +10,6 @@ use std::{collections::HashMap, time::Instant};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
-mod listen;
 pub mod queries;
 pub mod queue;
 mod util;
@@ -248,12 +247,6 @@ impl GraphModel {
             None => inner.clone(),
         };
 
-        tokio::spawn(async move {
-            match listen::listen_channel(lock, write_conn, replica, recv).await {
-                Ok(_) => {}
-                Err(e) => panic!("Error listening for requests, aborting: {}", e),
-            };
-        });
         let res = Self {
             inner,
             config,
