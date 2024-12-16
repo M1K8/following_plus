@@ -172,7 +172,6 @@ pub async fn listen_channel(
             Err(e) => {
                 warn!("Error getting follows for {}: {}", &msg.did, e);
                 in_flight.remove(&msg.did);
-                continue;
             }
         };
 
@@ -184,11 +183,10 @@ pub async fn listen_channel(
                 Ok(_) => {}
                 Err(e) => {
                     warn!("Error getting blocks for {}: {}", &msg.did, e);
-                    continue;
                 }
             };
+            seen_map.insert(did_blocks);
         }
-        seen_map.insert(did_blocks);
 
         match fetcher.fetch_and_return_posts(msg, &cursor).await {
             Ok(_) => {}
