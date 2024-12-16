@@ -90,11 +90,20 @@ pub async fn listen_channel(
                             seen_map_cl.insert(fcl);
                         }
                     }
+                    let all_follows_chunks: Vec<&[String]>;
+                    if filtered_follows.len() == 0 {
+                        return;
+                    }
+
+                    if filtered_follows.len() < 8 {
+                        all_follows_chunks = filtered_follows.chunks(1).collect();
+                    } else {
+                        all_follows_chunks = filtered_follows
+                            .chunks(filtered_follows.len() / 8)
+                            .collect();
+                    }
 
                     let mut set = JoinSet::new();
-                    let all_follows_chunks: Vec<&[String]> = filtered_follows
-                        .chunks(filtered_follows.len() / 8)
-                        .collect();
 
                     for idx in 0..all_follows_chunks.len() {
                         let mut c = match all_follows_chunks.get(idx) {
