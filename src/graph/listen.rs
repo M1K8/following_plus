@@ -77,20 +77,22 @@ pub async fn listen_channel(
                 tokio::spawn(async move {
                     info!("Recursively fetching {} follows for {did}", follows.len());
 
-                    let all_follows = Arc::new(DashSet::new());
+                    let all_follows_result = Arc::new(DashSet::new());
                     follows.iter().for_each(|f| {
-                        info!("Checking for follow {} // {did}", f.0);
-                        if !seen_map_cl.contains(&did) {
-                            all_follows.insert((f.0.clone(), f.1.clone(), did.clone()));
+                        info!("Checking for follow {} ", f.0);
+                        if !seen_map_cl.contains(&f.0) {
+                            warn!("Not present in seen map {}", f.0);
+                            all_follows_result.insert((f.0.clone(), f.1.clone(), did.clone()));
+                            seen_map_cl.insert(f.0.clone());
                         }
                     });
 
                     let mut set = JoinSet::new();
-                    let all_followers_chunks: Vec<&[(String, String)]> =
+                    let all_follows_chunks: Vec<&[(String, String)]> =
                         follows.chunks(follows.len() / 8).collect();
 
-                    for idx in 0..all_followers_chunks.len() {
-                        let mut c = match all_followers_chunks.get(idx) {
+                    for idx in 0..all_follows_chunks.len() {
+                        let mut c = match all_follows_chunks.get(idx) {
                             Some(c) => *c,
                             None => {
                                 continue;
@@ -101,35 +103,32 @@ pub async fn listen_channel(
                         let chunk = Vec::from(yoinked);
 
                         let seen_map = seen_map_cl.clone();
-                        let all_follows = all_follows.clone();
+                        let all_follows_result = all_follows_result.clone();
 
                         set.spawn(async move {
                             for (did, _) in chunk {
-                                tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
                                 let mut cl_2nd_follows = reqwest::ClientBuilder::new();
                                 cl_2nd_follows = cl_2nd_follows.timeout(Duration::from_secs(5));
                                 let cl_2nd_follows = cl_2nd_follows.build().unwrap();
                                 match first_call::get_follows(&did, cl_2nd_follows).await {
                                     Ok(mut f) => {
                                         f.iter_mut().for_each(|f| {
-                                            all_follows.insert((
+                                            all_follows_result.insert((
                                                 mem::take(&mut f.0),
                                                 mem::take(&mut f.1),
                                                 did.clone(),
                                             ));
                                         });
-
-                                        seen_map.insert(did.clone());
                                     }
                                     Err(e) => {
                                         if e.is::<first_call::RecNotFound>() {
-                                            seen_map.insert(did.clone()); // this aint ever gonna work, so ignore it
                                             info!("{did} probably doesnt exist on this PDS, skipping...")
                                         } else {
                                             warn!(
                                                 "Error getting 2nd degree follows for {did}: {:?}",
                                                 e
                                             );
+                                            seen_map.remove(&did); // this aint ever gonna work, so ignore it
                                         }
 
                                         continue;
@@ -139,13 +138,15 @@ pub async fn listen_channel(
                         });
                     }
                     set.join_all().await;
-                    info!("There are {} chunks", all_followers_chunks.len());
+                    info!("There are {} chunks", all_follows_chunks.len());
                     info!(
                         "Done Recursively fetching {} for {did}; writing...",
                         follows.len()
                     );
 
-                    match first_call::write_follows(all_follows, &second_deg_conn, lock).await {
+                    match first_call::write_follows(all_follows_result, &second_deg_conn, lock)
+                        .await
+                    {
                         Some(e) => warn!("Error writing 2nd degree follows for {did}: {:?}", e),
                         None => {}
                     };
