@@ -79,6 +79,7 @@ pub async fn listen_channel(
 
                     let all_follows_result = Arc::new(DashSet::new());
                     follows.iter().for_each(|f| {
+                        seen_map_cl.insert(f.0.clone());
                         all_follows_result.insert((f.0.clone(), f.1.clone(), did.clone()));
                     });
 
