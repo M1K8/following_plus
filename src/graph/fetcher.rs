@@ -63,19 +63,23 @@ impl Fetcher {
         let mut cursor;
 
         if let Some(mut cached) = self.cache.get_mut(&msg.did) {
-            info!("Grabbed {} cached posts", cached.len());
-            res_vec = mem::take(&mut cached);
-            let c = res_vec.last().unwrap().timestamp;
-            let now = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_micros();
+            if cached.len() > 0 {
+                info!("Grabbed {} cached posts", cached.len());
+                res_vec = mem::take(&mut cached);
+                let c = res_vec.last().unwrap().timestamp;
+                let now = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_micros();
 
-            if now - c as u128 > Duration::from_secs(3600).as_micros() {
-                res_vec.clear();
-                cursor = time.clone();
+                if now - c as u128 > Duration::from_secs(3600).as_micros() {
+                    res_vec.clear();
+                    cursor = time.clone();
+                } else {
+                    cursor = c.to_string();
+                }
             } else {
-                cursor = c.to_string();
+                cursor = time.clone();
             }
         } else {
             cursor = time.clone();
