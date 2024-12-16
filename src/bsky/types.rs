@@ -7,22 +7,24 @@ use serde_derive::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct FollowsResp {
     pub cursor: Option<String>,
-    pub follows: Vec<Account>,
+    pub records: Vec<Follow>,
+}
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Follow {
+    pub uri: String,
+    pub cid: String,
+    pub value: FollowVal,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FollowersResp {
-    pub cursor: Option<String>,
-    pub followers: Vec<Account>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Account {
-    pub did: String,
-    pub handle: String,
-    // dont care about the other stuff
+pub struct FollowVal {
+    #[serde(rename = "$type")]
+    pub type_field: Option<String>,
+    pub subject: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -52,11 +54,12 @@ pub struct Commit {
 #[serde(rename_all = "camelCase")]
 pub struct Record {
     #[serde(rename = "$type")]
-    pub type_field: String,
+    pub type_field: Option<String>,
     pub created_at: String,
     pub subject: Option<Subj>,
     pub lang: Option<String>,
     pub langs: Option<Vec<String>>,
+    pub facets: Option<Vec<Facet>>,
     pub text: Option<String>,
     pub reply: Option<Reply>,
     pub embed: Option<Embed>,
@@ -65,17 +68,39 @@ pub struct Record {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Facet {
+    pub index: Option<Index>,
+    pub features: Option<Vec<Feature>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Index {
+    pub byte_start: u64,
+    pub byte_end: u64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Feature {
+    #[serde(rename = "$type")]
+    pub type_field: Option<String>,
+    pub uri: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Image {
-    pub alt: String,
-    pub aspect_ratio: HashMap<String, String>,
-    pub image: ImageInternal,
+    pub alt: Option<String>,
+    pub aspect_ratio: Option<HashMap<String, String>>,
+    pub image: Option<ImageInternal>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageInternal {
     #[serde(rename = "$type")]
-    pub type_field: String,
+    pub type_field: Option<String>,
     #[serde(rename = "ref")]
     pub reff: Ref,
     pub mime_type: String,
@@ -93,9 +118,18 @@ pub struct Ref {
 #[serde(rename_all = "camelCase")]
 pub struct Embed {
     #[serde(rename = "$type")]
-    pub type_field: String,
+    pub type_field: Option<String>,
     pub uri: Option<String>,
     pub embedded: Option<Embd>,
+    pub external: Option<External>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct External {
+    pub title: Option<String>,
+    pub uri: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -115,7 +149,7 @@ pub struct Parent {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Subject {
-    pub cid: String,
+    pub cid: Option<String>,
     pub uri: String,
 }
 
