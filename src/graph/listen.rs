@@ -85,8 +85,9 @@ pub async fn listen_channel(
                     let mut filtered_follows = Vec::new();
                     for (mut f, _) in follows {
                         if !seen_map_cl.contains(&f) {
+                            let fcl = f.clone();
                             filtered_follows.push(mem::take(&mut f));
-                            seen_map_cl.insert(f.clone());
+                            seen_map_cl.insert(fcl);
                         }
                     }
 
