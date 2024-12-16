@@ -79,17 +79,20 @@ pub async fn listen_channel(
 
                     let all_follows_result = Arc::new(DashSet::new());
                     follows.iter().for_each(|f| {
-                        info!("Checking for follow {} ", f.0);
-                        if !seen_map_cl.contains(&f.0) {
-                            warn!("Not present in seen map {}", f.0);
-                            all_follows_result.insert((f.0.clone(), f.1.clone(), did.clone()));
-                            seen_map_cl.insert(f.0.clone());
-                        }
+                        all_follows_result.insert((f.0.clone(), f.1.clone(), did.clone()));
                     });
 
+                    let mut filtered_follows = Vec::new();
+                    for (mut f, _) in follows {
+                        if !seen_map_cl.contains(&f) {
+                            filtered_follows.push(mem::take(&mut f));
+                        }
+                    }
+
                     let mut set = JoinSet::new();
-                    let all_follows_chunks: Vec<&[(String, String)]> =
-                        follows.chunks(follows.len() / 8).collect();
+                    let all_follows_chunks: Vec<&[String]> = filtered_follows
+                        .chunks(filtered_follows.len() / 8)
+                        .collect();
 
                     for idx in 0..all_follows_chunks.len() {
                         let mut c = match all_follows_chunks.get(idx) {
@@ -106,7 +109,7 @@ pub async fn listen_channel(
                         let all_follows_result = all_follows_result.clone();
 
                         set.spawn(async move {
-                            for (did, _) in chunk {
+                            for did in chunk {
                                 let mut cl_2nd_follows = reqwest::ClientBuilder::new();
                                 cl_2nd_follows = cl_2nd_follows.timeout(Duration::from_secs(5));
                                 let cl_2nd_follows = cl_2nd_follows.build().unwrap();
@@ -141,7 +144,7 @@ pub async fn listen_channel(
                     info!("There are {} chunks", all_follows_chunks.len());
                     info!(
                         "Done Recursively fetching {} for {did}; writing...",
-                        follows.len()
+                        filtered_follows.len()
                     );
 
                     match first_call::write_follows(all_follows_result, &second_deg_conn, lock)
