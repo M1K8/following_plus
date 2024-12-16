@@ -92,6 +92,7 @@ pub async fn listen_channel(
                     }
                     let all_follows_chunks: Vec<&[String]>;
                     if filtered_follows.len() == 0 {
+                        in_flight_spawned.remove(&did);
                         return;
                     }
 
@@ -164,7 +165,7 @@ pub async fn listen_channel(
                         Some(e) => warn!("Error writing 2nd degree follows for {did}: {:?}", e),
                         None => {}
                     };
-                    info!("Cleared from in-flight for {did}");
+
                     in_flight_spawned.remove(&did);
                 });
             }
@@ -177,14 +178,16 @@ pub async fn listen_channel(
 
         // Blocks
         let did_blocks = msg.did.clone();
-        let cl_blocks = client.clone();
-        match first_call::get_blocks(&did_blocks, cl_blocks, &conn, write_lock.clone()).await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!("Error getting blocks for {}: {}", &msg.did, e);
-                continue;
-            }
-        };
+        if !seen_map.contains(&did_blocks) {
+            let cl_blocks = client.clone();
+            match first_call::get_blocks(&did_blocks, cl_blocks, &conn, write_lock.clone()).await {
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("Error getting blocks for {}: {}", &msg.did, e);
+                    continue;
+                }
+            };
+        }
         seen_map.insert(did_blocks);
 
         match fetcher.fetch_and_return_posts(msg, &cursor).await {

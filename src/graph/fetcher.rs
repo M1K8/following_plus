@@ -134,7 +134,9 @@ impl Fetcher {
             })
             .await
         {
-            Ok(_) => {}
+            Ok(_) => {
+                info!("Done!")
+            }
             Err(e) => {
                 warn!("Error replying to post request for {}: {:?}", msg.did, e);
                 return Err(Box::new(e));
