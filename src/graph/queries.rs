@@ -157,7 +157,7 @@ DELETE r
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) const PURGE_OLD_POSTS: &str = r#"
-MATCH (p:Post) WHERE toInteger(p.timestamp) < (timestamp() - 21600000000) // 6 hours
+MATCH (p:Post) WHERE toInteger(p.timestamp) < (timestamp() - 7200000000) // 2 hours
 DETACH DELETE p
 "#;
 
@@ -184,13 +184,13 @@ WITH og, u, p AS post
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 with u,b, post, CASE WHEN b IS NULL 
   THEN post ELSE NULL END as p
-WHERE p IS NOT NULL AND p.likes >= 25
+WHERE p IS NOT NULL AND p.likes >= 50
 // Filter off posts from blocked users
 
 WITH p, u, toInteger(p.timestamp) AS ts
 WHERE ts < {}
 
-RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 20
+RETURN u.did AS user, p.rkey AS url,ts LIMIT 100
 "#;
 
 pub(crate) const GET_FOLLOWING_PLUS_REPOSTS: &str = r#"
@@ -201,13 +201,13 @@ WITH og, u, p AS post
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 WITH u,b, post, CASE WHEN b IS NULL 
   THEN post ELSE NULL END as p
-WHERE p IS NOT NULL AND p.reposts >= 25
+WHERE p IS NOT NULL AND p.reposts >= 40
 // Filter off posts from blocked users
 WITH p, u, toInteger(p.timestamp) AS ts
 
 WHERE ts < {}
 
-RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 20
+RETURN u.did AS user, p.rkey AS url, ts LIMIT 100
 "#;
 
 pub(crate) const GET_BEST_2ND_DEG_REPOSTS: &str = r#"
@@ -223,7 +223,7 @@ WITH u, b, p, toInteger(p.timestamp) AS ts, CASE WHEN b IS NULL
   THEN p ELSE NULL END as post
 WHERE post IS NOT NULL AND ts < {}
 
-RETURN u.did AS user, p.rkey AS url,  ts ORDER BY ts DESC LIMIT 20
+RETURN u.did AS user, p.rkey AS url, ts LIMIT 100
 "#;
 
 pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
@@ -239,5 +239,5 @@ WITH u, b, p, toInteger(p.timestamp) AS ts,  CASE WHEN b IS NULL
   THEN p ELSE NULL END as post
 WHERE post IS NOT NULL AND ts < {}
 
-RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 20
+RETURN u.did AS user, p.rkey AS url,ts LIMIT 100
 "#;
