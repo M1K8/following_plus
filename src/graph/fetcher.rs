@@ -72,7 +72,7 @@ impl Fetcher {
                     .unwrap()
                     .as_micros();
 
-                if now - c as u128 > Duration::from_secs(3600).as_micros() {
+                if now - c as u128 > Duration::from_secs(300).as_micros() {
                     res_vec.clear();
                     cursor = time.clone();
                 } else {
