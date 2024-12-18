@@ -184,7 +184,7 @@ WITH og, u, p AS post
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 with u,b, post, CASE WHEN b IS NULL 
   THEN post ELSE NULL END as p
-WHERE p IS NOT NULL AND p.likes >= 100
+WHERE p IS NOT NULL AND p.likes >= 75
 // Filter off posts from blocked users
 
 WITH p, u, toInteger(p.timestamp) AS ts
@@ -201,7 +201,7 @@ WITH og, u, p AS post
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 WITH u,b, post, CASE WHEN b IS NULL 
   THEN post ELSE NULL END as p
-WHERE p IS NOT NULL AND p.reposts >= 80
+WHERE p IS NOT NULL AND p.reposts >= 60
 // Filter off posts from blocked users
 WITH p, u, toInteger(p.timestamp) AS ts
 
@@ -214,7 +214,7 @@ pub(crate) const GET_BEST_2ND_DEG_REPOSTS: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:REPOSTED]->(p:Post)
 WITH p,og
  
-WHERE p.likes >= 125
+WHERE p.likes >= 100
 MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
 
@@ -229,7 +229,7 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(:User)-[:LIKES]->(p:Post)
 WITH p,og
-WHERE p.likes >= 125
+WHERE p.likes >= 10
 
 MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
@@ -238,6 +238,14 @@ OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 WITH u, b, p, toInteger(p.timestamp) AS ts,  CASE WHEN b IS NULL 
   THEN p ELSE NULL END as post
 WHERE post IS NOT NULL AND ts < {}
+
+RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
+"#;
+
+pub(crate) const GET_BEST_FOLLOWED: &str = r#"
+MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:POSTED]->(p:Post)
+WITH p, u, toInteger(p.timestamp) AS ts
+WHERE (p.likes > 10 OR p.reposts > 5) AND (ts - {}) <= 120000000 // last 2 mins
 
 RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 "#;

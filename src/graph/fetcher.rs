@@ -159,7 +159,7 @@ impl Fetcher {
             &queries::GET_BEST_2ND_DEG_LIKES
                 .to_string()
                 .replace("{}", &time),
-        )
+        ) //we can 100% macro this
         .param("did", msg.did.clone());
         let qry2 = neo4rs::query(
             &queries::GET_BEST_2ND_DEG_REPOSTS
@@ -180,19 +180,24 @@ impl Fetcher {
         )
         .param("did", msg.did.clone());
 
+        let qry5 = neo4rs::query(&queries::GET_BEST_FOLLOWED.to_string().replace("{}", &time))
+            .param("did", msg.did.clone());
+
         let res = tokio::try_join!(
             self.read_conn.execute(qry1),
             self.read_conn.execute(qry2),
             self.read_conn.execute(qry3),
-            self.read_conn.execute(qry4)
+            self.read_conn.execute(qry4),
+            self.read_conn.execute(qry5)
         );
         let posts = Arc::new(DashMap::new());
         match res {
-            Ok((mut l1, mut l2, mut l3, mut l4)) => {
+            Ok((mut l1, mut l2, mut l3, mut l4, mut l5)) => {
                 let p1 = posts.clone();
                 let p2 = posts.clone();
                 let p3 = posts.clone();
                 let p4 = posts.clone();
+                let p5 = posts.clone();
                 let f1 = tokio::spawn(async move {
                     loop {
                         process_next!(l1.next().await, p1, "2ND_DEG_LIKES");
@@ -217,7 +222,13 @@ impl Fetcher {
                     }
                 });
 
-                match tokio::try_join!(f1, f2, f3, f4) {
+                let f5 = tokio::spawn(async move {
+                    loop {
+                        process_next!(l5.next().await, p5, "BEST_FOLLOWING");
+                    }
+                });
+
+                match tokio::try_join!(f1, f2, f3, f4, f5) {
                     Ok(_) => {}
                     Err(e) => {
                         return Err(Box::new(neo4rs::Error::UnexpectedMessage(e.to_string())))
