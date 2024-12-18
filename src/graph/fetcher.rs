@@ -60,30 +60,30 @@ impl Fetcher {
         time: &String,
     ) -> Result<(), Box<dyn error::Error>> {
         let mut res_vec = Vec::new();
-        let mut cursor;
+        let mut cursor = time.clone();
 
-        if let Some(mut cached) = self.cache.get_mut(&msg.did) {
-            if cached.len() > 0 {
-                info!("Grabbed {} cached posts", cached.len());
-                res_vec = mem::take(&mut cached);
-                let c = res_vec.last().unwrap().timestamp;
-                let now = SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_micros();
+        // if let Some(mut cached) = self.cache.get_mut(&msg.did) {
+        //     if cached.len() > 0 {
+        //         info!("Grabbed {} cached posts", cached.len());
+        //         res_vec = mem::take(&mut cached);
+        //         let c = res_vec.last().unwrap().timestamp;
+        //         let now = SystemTime::now()
+        //             .duration_since(SystemTime::UNIX_EPOCH)
+        //             .unwrap()
+        //             .as_micros();
 
-                if now - c as u128 > Duration::from_secs(300).as_micros() {
-                    res_vec.clear();
-                    cursor = time.clone();
-                } else {
-                    cursor = c.to_string();
-                }
-            } else {
-                cursor = time.clone();
-            }
-        } else {
-            cursor = time.clone();
-        }
+        //         if now - c as u128 > Duration::from_secs(300).as_micros() {
+        //             res_vec.clear();
+        //             cursor = time.clone();
+        //         } else {
+        //             cursor = c.to_string();
+        //         }
+        //     } else {
+        //         cursor = time.clone();
+        //     }
+        // } else {
+        //     cursor = time.clone();
+        // }
 
         let mut first_time = false;
         while res_vec.len() < 40 && !first_time {
@@ -121,8 +121,8 @@ impl Fetcher {
             };
             return Ok(());
         } else if res_vec.len() > 30 {
-            let leftover = res_vec.split_off(30);
-            self.cache.insert(msg.did.clone(), leftover);
+            let _leftover = res_vec.split_off(30);
+            //self.cache.insert(msg.did.clone(), leftover);
         }
 
         res_vec.sort_unstable();

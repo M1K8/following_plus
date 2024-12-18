@@ -23,6 +23,7 @@ pub async fn listen_channel(
     let in_flight = Arc::new(DashSet::new());
     let seen_map = Arc::new(DashSet::new());
     let mut fetcher = fetcher::Fetcher::new(read_conn);
+    
     loop {
         let mut msg = match recv.recv().await {
             Some(s) => s,
