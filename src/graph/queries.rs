@@ -243,7 +243,7 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 "#;
 
 pub(crate) const GET_BEST_FOLLOWED: &str = r#"
-MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:POSTED]->(p:Post)
+MATCH (og:User {did: $did})-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
 WITH p, u, toInteger(p.timestamp) AS ts
 WHERE (p.likes > 10 OR p.reposts > 5) AND (ts - {}) <= 120000000 // last 2 mins
 
