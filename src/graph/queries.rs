@@ -214,7 +214,7 @@ pub(crate) const GET_BEST_2ND_DEG_REPOSTS: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:REPOSTED]->(p:Post)
 WITH p,og
  
-WHERE p.likes >= 100
+WHERE p.likes >= 50
 MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
 
@@ -229,7 +229,7 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(:User)-[:LIKES]->(p:Post)
 WITH p,og
-WHERE p.likes >= 10
+WHERE p.likes >= 100
 
 MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
