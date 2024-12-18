@@ -190,7 +190,7 @@ WHERE p IS NOT NULL AND p.likes >= 100
 WITH p, u, toInteger(p.timestamp) AS ts
 WHERE ts < {}
 
-RETURN u.did AS user, p.rkey AS url,ts LIMIT 200
+RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 "#;
 
 pub(crate) const GET_FOLLOWING_PLUS_REPOSTS: &str = r#"
@@ -207,7 +207,7 @@ WITH p, u, toInteger(p.timestamp) AS ts
 
 WHERE ts < {}
 
-RETURN u.did AS user, p.rkey AS url, ts LIMIT 200
+RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 "#;
 
 pub(crate) const GET_BEST_2ND_DEG_REPOSTS: &str = r#"
@@ -223,7 +223,7 @@ WITH u, b, p, toInteger(p.timestamp) AS ts, CASE WHEN b IS NULL
   THEN p ELSE NULL END as post
 WHERE post IS NOT NULL AND ts < {}
 
-RETURN u.did AS user, p.rkey AS url, ts LIMIT 200
+RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 "#;
 
 pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
@@ -239,5 +239,5 @@ WITH u, b, p, toInteger(p.timestamp) AS ts,  CASE WHEN b IS NULL
   THEN p ELSE NULL END as post
 WHERE post IS NOT NULL AND ts < {}
 
-RETURN u.did AS user, p.rkey AS url,ts LIMIT 200
+RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 200
 "#;
