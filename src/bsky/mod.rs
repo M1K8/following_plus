@@ -97,8 +97,8 @@ pub async fn handle_event_fast(
                                 if now - t.timestamp_micros()
                                     > chrono::Duration::hours(24).num_microseconds().unwrap()
                                 {
-                                    warn!("Post older than 24 hours: {t}");
-                                    //return Ok((0, rec));
+                                    //warn!("Post older than 24 hours: {t}");
+                                    return Ok((0, rec));
                                 }
                                 t.timestamp_micros()
                             }
