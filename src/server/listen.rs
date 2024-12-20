@@ -82,7 +82,6 @@ pub async fn listen_channel(
             seen_map.insert(did_blocks);
         }
 
-        in_flight.insert(msg.did.clone());
         match graph::first_call::get_follows(&did, cl_follows).await {
             Ok(follows) => {
                 let conn = conn.clone();
@@ -95,6 +94,7 @@ pub async fn listen_channel(
                         warn!("Already in flight for {did}, skipping...");
                         return
                     }
+                    in_flight.insert(msg.did.clone());
                     info!("Recursively fetching {} follows for {did}", follows.len());
 
                     let all_follows_result = Arc::new(DashSet::new());
