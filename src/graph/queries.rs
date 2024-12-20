@@ -175,7 +175,7 @@ DETACH DELETE u
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Sorting by timestamp happens in RustLand, as it seems to be signigicantly faster than in memgraphLand (~2.3s for each query -> 300ms), given that we sort by ts again anyway once the results are combined
-/// 
+///
 pub(crate) const GET_FOLLOWING_PLUS_LIKES: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
 WITH u,p,og

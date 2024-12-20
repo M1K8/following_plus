@@ -2,6 +2,7 @@ use common::FetchMessage;
 use graph::GraphModel;
 use pprof::protos::Message;
 use simple_moving_average::{SumTreeSMA, SMA};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, mem, process};
@@ -109,9 +110,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let url2 = format!("wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     info!("Connected to Bluesky firehose");
-    let ma = SumTreeSMA::<_, i64, 10000>::new();
+    let ma = SumTreeSMA::<_, i64, 20000>::new();
+    let c = Arc::new(AtomicU64::new(0));
+    let cc = c.clone();
     let ctr = Arc::new(Mutex::new(ma));
     let ctr2 = ctr.clone();
+
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
@@ -121,6 +125,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 panic!()
             }
             info!("Average drift over 60s: {}ms", avg);
+            info!(
+                "Processed {} events / second",
+                (cc.load(Ordering::Relaxed) / 60)
+            );
+            cc.store(0, Ordering::Relaxed);
         }
     });
     let mut last_time = SystemTime::now();
@@ -153,6 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(msg) => {
                 match msg.opcode {
                     fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
+                        c.fetch_add(1, Ordering::Relaxed);
                         match msg.payload {
                             fastwebsockets::Payload::Bytes(m) => {
                                 let l = lock.read().await;
