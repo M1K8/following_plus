@@ -94,7 +94,7 @@ pub async fn listen_channel(
                         warn!("Already in flight for {did}, skipping...");
                         return
                     }
-                    in_flight.insert(msg.did.clone());
+                    in_flight.insert(did.clone());
                     info!("Recursively fetching {} follows for {did}", follows.len());
 
                     let all_follows_result = Arc::new(DashSet::new());
