@@ -23,15 +23,16 @@ pub async fn listen_channel(
     let in_flight = Arc::new(DashSet::new());
     let seen_map = Arc::new(DashSet::new());
     let mut fetcher = fetcher::Fetcher::new(read_conn);
-    
+
     loop {
         let mut msg = match recv.recv().await {
             Some(s) => s,
             None => continue,
         };
 
-        if msg.did.is_empty() || in_flight.contains(&msg.did) {
-            warn!("Replying blank - in flight or empty did {}", &msg.did);
+        if msg.did.is_empty() {
+            warn!("Replying blank  empty did {}", &msg.did);
+            //TODO - Move check to thread so we can still fetch
             match msg
                 .resp
                 .send(PostResp {
@@ -76,6 +77,9 @@ pub async fn listen_channel(
         match first_call::get_follows(&did, cl_follows).await {
             Ok(follows) => {
                 tokio::spawn(async move {
+                    if in_flight_spawned.contains(&did) {
+                        warn!("Already in flight for {did}, skipping...");
+                    }
                     info!("Recursively fetching {} follows for {did}", follows.len());
 
                     let all_follows_result = Arc::new(DashSet::new());
