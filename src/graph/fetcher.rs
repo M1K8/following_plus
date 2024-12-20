@@ -1,9 +1,5 @@
 use core::error;
-use std::{
-    mem,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use neo4rs::Graph;
@@ -20,7 +16,7 @@ macro_rules! process_next {
                 Some(v) => {
                     let uri: String = v.get("url").unwrap();
                     let user: String = v.get("user").unwrap();
-                    let uri = crate::graph::util::get_post_uri(user, uri);
+                    let uri = crate::graph::get_post_uri(user, uri);
                     let timestamp: u64 = v.get("ts").unwrap();
                     $posts_expr.insert(
                         uri.clone(),
@@ -44,14 +40,14 @@ macro_rules! process_next {
 }
 pub struct Fetcher {
     read_conn: Graph,
-    cache: DashMap<String, Vec<PostMsg>>,
+    _cache: DashMap<String, Vec<PostMsg>>,
 }
 
 impl Fetcher {
     pub fn new(read_conn: Graph) -> Self {
         Self {
             read_conn,
-            cache: DashMap::new(),
+            _cache: DashMap::new(),
         }
     }
     pub async fn fetch_and_return_posts(

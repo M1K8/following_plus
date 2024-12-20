@@ -15,9 +15,11 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::{info, warn};
+use tracing::error;
 use urlencoding::decode;
-mod auth;
+
+pub mod auth;
+pub mod listen;
 pub mod types;
 struct StateStruct {
     send_chan: Sender<FetchMessage>,
@@ -36,8 +38,6 @@ pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error:
     let state = StateStruct {
         send_chan: chan.clone(),
     };
-
-    // Todo - not working on box?
     let router = Router::new()
         .route("/get_feed", get(index))
         .layer(ServiceBuilder::new().layer(cors))
@@ -63,7 +63,7 @@ async fn index(
             auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
         None => {
-            info!("No Header!");
+            error!("No Header - cant do auth!");
             return Err(axum::http::StatusCode::NOT_FOUND);
         }
     };
@@ -84,7 +84,7 @@ async fn index(
     let resp;
     tokio::select! {
         _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
-            warn!("timed out");
+            error!("timed out waiting for response from graph worker");
             return Err(StatusCode::REQUEST_TIMEOUT)
         }
         r = recv.recv() => {
@@ -95,7 +95,7 @@ async fn index(
     let resp = match resp {
         Some(r) => r,
         None => {
-            info!("nil response from channel");
+            error!("nil response from channel");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };

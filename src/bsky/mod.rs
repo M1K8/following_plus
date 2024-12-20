@@ -1,5 +1,4 @@
-use crate::bsky::types::*;
-use crate::graph::GraphModel;
+use crate::{bsky::types::*, graph::Grapher};
 use chrono::Utc;
 use hyper::StatusCode;
 use once_cell::sync::Lazy;
@@ -43,7 +42,7 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
 
 pub async fn handle_event_fast(
     evt: &[u8],
-    g: &mut GraphModel,
+    g: &mut impl Grapher,
     mut rec: Option<mpsc::Receiver<()>>,
     compressed: bool,
 ) -> Result<(i64, Option<mpsc::Receiver<()>>), Box<dyn std::error::Error>> {
@@ -51,10 +50,7 @@ pub async fn handle_event_fast(
     spam.insert("did:plc:xdx2v7gyd5dmfqt7v77gf457".to_owned());
     spam.insert("did:plc:a56vfzkrxo2bh443zgjxr4ix".to_owned());
     spam.insert("did:plc:cov6pwd7ajm2wgkrgbpej2f3".to_owned());
-
-    // this ones fucking weird
     spam.insert("did:plc:fcnbisw7xl6lmtcnvioocffz".to_owned());
-    // no hate, but bro...
     spam.insert("did:plc:ss7fj6p6yfirwq2hnlkfuntt".to_owned());
 
     let deser_evt: BskyEvent;
@@ -101,11 +97,12 @@ pub async fn handle_event_fast(
                                 if now - t.timestamp_micros()
                                     > chrono::Duration::hours(24).num_microseconds().unwrap()
                                 {
-                                    return Ok((0, rec));
+                                    warn!("Post older than 24 hours: {t}");
+                                    //return Ok((0, rec));
                                 }
                                 t.timestamp_micros()
                             }
-                            Err(_) => deser_evt.time_us,
+                            Err(_) => deser_evt.time_us, // if we cant find this field, just use the time the event was emitted
                         };
                         match &r.reply {
                             Some(r) => {
@@ -134,9 +131,7 @@ pub async fn handle_event_fast(
                     panic!("empty rkey");
                 }
 
-                let recv = g
-                    .add_repost(deser_evt.did, rkey_out.to_string(), rkey, rec)
-                    .await;
+                let recv = g.add_repost(deser_evt.did, rkey_out, rkey, rec).await;
                 return Ok((drift, recv));
             }
 
@@ -147,9 +142,7 @@ pub async fn handle_event_fast(
                     panic!("empty rkey");
                 }
 
-                let recv = g
-                    .add_like(deser_evt.did, rkey_out.to_string(), rkey, rec)
-                    .await;
+                let recv = g.add_like(deser_evt.did, rkey_out, rkey, rec).await;
                 return Ok((drift, recv));
             }
 
@@ -175,10 +168,10 @@ pub async fn handle_event_fast(
             }
 
             "app.bsky.graph.block" => {
-                let mut vblockee = String::new();
+                let mut blockee = String::new();
                 match &commit.record {
                     Some(r) => {
-                        vblockee = match &r.subject {
+                        blockee = match &r.subject {
                             Some(s) => match s {
                                 Subj::T1(s) => s.to_owned(),
                                 Subj::T2(_) => return Ok((0, rec)),
@@ -188,10 +181,10 @@ pub async fn handle_event_fast(
                     }
                     None => {}
                 }
-                if vblockee.is_empty() {
-                    panic!("empty vblockee");
+                if blockee.is_empty() {
+                    panic!("empty blockee");
                 }
-                let recv = g.add_block(vblockee, deser_evt.did, rkey, rec).await;
+                let recv = g.add_block(blockee, deser_evt.did, rkey, rec).await;
                 return Ok((drift, recv));
             }
             _ => {}

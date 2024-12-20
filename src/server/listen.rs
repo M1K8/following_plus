@@ -8,7 +8,7 @@ use tokio::task::JoinSet;
 use tracing::{info, warn};
 
 use crate::common::{FetchMessage, PostMsg, PostResp};
-use crate::graph::{fetcher, first_call};
+use crate::graph;
 
 pub async fn listen_channel(
     write_lock: Arc<RwLock<()>>,
@@ -22,7 +22,7 @@ pub async fn listen_channel(
 
     let in_flight = Arc::new(DashSet::new());
     let seen_map = Arc::new(DashSet::new());
-    let mut fetcher = fetcher::Fetcher::new(read_conn);
+    let mut fetcher = graph::fetcher::Fetcher::new(read_conn);
 
     loop {
         let mut msg = match recv.recv().await {
@@ -32,7 +32,6 @@ pub async fn listen_channel(
 
         if msg.did.is_empty() {
             warn!("Replying blank  empty did {}", &msg.did);
-            //TODO - Move check to thread so we can still fetch
             match msg
                 .resp
                 .send(PostResp {
@@ -68,16 +67,31 @@ pub async fn listen_channel(
         let did = msg.did.clone();
         let cl_follows = client.clone();
 
-        let lock = write_lock.clone();
-        let second_deg_conn = conn.clone();
-        let seen_map_cl = seen_map.clone();
-        let in_flight_spawned = in_flight.clone();
+        // Blocks
+        let did_blocks = msg.did.clone();
+        if !seen_map.contains(&did_blocks) {
+            let cl_blocks = client.clone();
+            match graph::first_call::get_blocks(&did_blocks, cl_blocks, &conn, write_lock.clone())
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("Error getting blocks for {}: {}", &msg.did, e);
+                }
+            };
+            seen_map.insert(did_blocks);
+        }
 
         in_flight.insert(msg.did.clone());
-        match first_call::get_follows(&did, cl_follows).await {
+        match graph::first_call::get_follows(&did, cl_follows).await {
             Ok(follows) => {
+                let conn = conn.clone();
+                let lock = write_lock.clone();
+                let seen_map = seen_map.clone();
+                let in_flight = in_flight.clone();
+
                 tokio::spawn(async move {
-                    if in_flight_spawned.contains(&did) {
+                    if in_flight.contains(&did) {
                         warn!("Already in flight for {did}, skipping...");
                     }
                     info!("Recursively fetching {} follows for {did}", follows.len());
@@ -89,23 +103,23 @@ pub async fn listen_channel(
 
                     let mut filtered_follows = Vec::new();
                     for (mut f, _) in follows {
-                        if !seen_map_cl.contains(&f) {
+                        if !seen_map.contains(&f) {
                             let fcl = f.clone();
                             filtered_follows.push(mem::take(&mut f));
-                            seen_map_cl.insert(fcl);
+                            seen_map.insert(fcl);
                         }
                     }
                     let all_follows_chunks: Vec<&[String]>;
                     if filtered_follows.len() == 0 {
-                        in_flight_spawned.remove(&did);
+                        in_flight.remove(&did);
                         return;
                     }
 
-                    if filtered_follows.len() < 8 {
+                    if filtered_follows.len() < 24 {
                         all_follows_chunks = filtered_follows.chunks(1).collect();
                     } else {
                         all_follows_chunks = filtered_follows
-                            .chunks(filtered_follows.len() / 8)
+                            .chunks(filtered_follows.len() / 24)
                             .collect();
                     }
 
@@ -122,15 +136,15 @@ pub async fn listen_channel(
                         let yoinked = mem::take(&mut c);
                         let chunk = Vec::from(yoinked);
 
-                        let seen_map = seen_map_cl.clone();
+                        let seen_map = seen_map.clone();
                         let all_follows_result = all_follows_result.clone();
 
                         set.spawn(async move {
                             for did in chunk {
-                                let mut cl_2nd_follows = reqwest::ClientBuilder::new();
-                                cl_2nd_follows = cl_2nd_follows.timeout(Duration::from_secs(5));
-                                let cl_2nd_follows = cl_2nd_follows.build().unwrap();
-                                match first_call::get_follows(&did, cl_2nd_follows).await {
+                                let mut web_client = reqwest::ClientBuilder::new();
+                                web_client = web_client.timeout(Duration::from_secs(5));
+                                let web_client = web_client.build().unwrap();
+                                match graph::first_call::get_follows(&did, web_client).await {
                                     Ok(mut f) => {
                                         f.iter_mut().for_each(|f| {
                                             all_follows_result.insert((
@@ -141,7 +155,7 @@ pub async fn listen_channel(
                                         });
                                     }
                                     Err(e) => {
-                                        if e.is::<first_call::RecNotFound>() {
+                                        if e.is::<graph::first_call::RecNotFound>() {
                                             info!("{did} probably doesnt exist on this PDS, skipping...")
                                         } else {
                                             warn!(
@@ -164,14 +178,12 @@ pub async fn listen_channel(
                         filtered_follows.len()
                     );
 
-                    match first_call::write_follows(all_follows_result, &second_deg_conn, lock)
-                        .await
-                    {
+                    match graph::first_call::write_follows(all_follows_result, &conn, lock).await {
                         Some(e) => warn!("Error writing 2nd degree follows for {did}: {:?}", e),
                         None => {}
                     };
 
-                    in_flight_spawned.remove(&did);
+                    in_flight.remove(&did);
                 });
             }
             Err(e) => {
@@ -179,20 +191,6 @@ pub async fn listen_channel(
                 in_flight.remove(&msg.did);
             }
         };
-
-        // Blocks
-        let did_blocks = msg.did.clone();
-        if !seen_map.contains(&did_blocks) {
-            let cl_blocks = client.clone();
-            match first_call::get_blocks(&did_blocks, cl_blocks, &conn, write_lock.clone()).await {
-                Ok(_) => {}
-                Err(e) => {
-                    warn!("Error getting blocks for {}: {}", &msg.did, e);
-                }
-            };
-            seen_map.insert(did_blocks);
-        }
-
         match fetcher.fetch_and_return_posts(msg, &cursor).await {
             Ok(_) => {}
             Err(_) => continue,

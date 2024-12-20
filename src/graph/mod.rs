@@ -1,25 +1,23 @@
 use crate::common::FetchMessage;
+use crate::server;
 use backoff::future::retry;
 use backoff::{Error, ExponentialBackoffBuilder};
 use dashmap::DashMap;
-use neo4rs::{Config, ConfigBuilder, Graph, Query};
+use neo4rs::{ConfigBuilder, Graph, Query};
 use std::env;
+use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, time::Instant};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
-mod fetcher;
-mod first_call;
-mod listen;
+pub mod fetcher;
+pub mod first_call;
 pub mod queries;
-pub mod queue;
-mod util;
 
 pub struct GraphModel {
     inner: Graph,
-    config: Config,
     like_queue: Vec<HashMap<String, String>>,
     post_queue: Vec<HashMap<String, String>>,
     reply_queue: Vec<HashMap<String, String>>,
@@ -38,97 +36,172 @@ pub struct GraphModel {
 }
 
 const TX_Q_LEN: usize = 70;
+const Q_LIMIT: usize = 55;
 
-impl GraphModel {
-    pub async fn enqueue_query(
+macro_rules! add_to_queue {
+    ($self:ident, $query_name:expr, $recv:ident, $( $arg:ident ),+) => {{
+        let queue = match $query_name {
+            "reply" =>  (&mut $self.reply_queue,queries::ADD_REPLY),
+            "post" =>   (&mut $self.post_queue,queries::ADD_POST),
+            "repost" => (&mut $self.repost_queue,queries::ADD_REPOST),
+            "follow" => (&mut $self.follow_queue,queries::ADD_FOLLOW),
+            "block" =>  (&mut $self.block_queue, queries::ADD_BLOCK),
+            "like" =>   (&mut $self.like_queue,queries::ADD_LIKE),
+            _ => panic!("unknown query name")
+        };
+        // HashMap-ify the input params w/ the same name as defined in Ruat
+        let mut params = HashMap::<String, String>::new();
+        $(
+            params.insert(stringify!($arg).to_string(), $arg);
+        )*
+        queue.0.push(params);
+        // Check if the queue is full
+        if queue.0.len() >= Q_LIMIT {
+            // Move queue values without copying
+            let qry = neo4rs::query(queue.1).param(&pluralize($query_name), mem::take(queue.0));
+            let resp = Grapher::enqueue_query($self,$query_name.to_string(), qry, $recv).await;
+            return resp
+        }
+
+        $recv // we havent used the channel, so just pass it back up
+
+    }};
+}
+
+macro_rules! remove_from_queue {
+    ($query_name:expr,$recv:ident, $self:ident, $( $arg:ident ),+) => {{
+        let queue = match $query_name {
+            "reply" =>  (&mut $self.rm_reply_queue,queries::REMOVE_REPLY),
+            "post" =>   (&mut $self.rm_post_queue,queries::REMOVE_POST),
+            "repost" => (&mut $self.rm_repost_queue,queries::REMOVE_REPOST),
+            "follow" => (&mut $self.rm_follow_queue,queries::REMOVE_FOLLOW),
+            "block" =>  (&mut $self.rm_block_queue, queries::REMOVE_BLOCK),
+            "like" =>   (&mut $self.rm_like_queue,queries::REMOVE_LIKE),
+            _ => panic!("unknown query name")
+        };
+        // Helper to build the argument map with variable names as keys
+        let mut params = HashMap::new();
+        $(
+            params.insert(stringify!($arg).to_string(), $arg);
+        )*
+
+        queue.0.push(params);
+        // Check if the queue is full
+        if queue.0.len() >= Q_LIMIT {
+            // Move queue values without copying
+            let qry = neo4rs::query(queue.1).param(&pluralize($query_name), mem::take(queue.0));
+            let resp = Grapher::enqueue_query($self,$query_name.to_string(), qry, $recv).await;
+            return resp
+        }
+
+        $recv // we havent used the channel, so just pass it back up
+    }};
+}
+
+#[trait_variant::make(Grapher: Send)]
+pub trait LocalGrapher {
+    async fn enqueue_query(
         &mut self,
         name: String,
         qry: neo4rs::Query,
         prev_recv: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>> {
-        let inner = self.inner.clone();
-        let queue = self.tx_queue.clone();
-        if queue.len() > TX_Q_LEN {
-            let n = Instant::now();
-            let (send, recv) = mpsc::channel(1);
-            let id = format!("{:?}", &recv);
+    ) -> Option<mpsc::Receiver<()>>;
 
-            if prev_recv.is_some() {
-                prev_recv.unwrap().recv().await;
-            }
+    async fn add_reply(
+        &mut self,
+        did: String,
+        rkey: String,
+        parent: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
 
-            tokio::spawn(async move {
-                match retry(
-                    ExponentialBackoffBuilder::default()
-                        .with_initial_interval(Duration::from_millis(5))
-                        .with_max_elapsed_time(Some(Duration::from_millis(3450)))
-                        .with_randomization_factor(0.35)
-                        .build(),
-                    || async {
-                        let q_vals: Vec<Query> = queue.iter().map(|v| v.value().clone()).collect();
-                        let mut tx = inner.start_txn().await.unwrap();
-                        match tx.run_queries(q_vals).await {
-                            //TOTO - Select for timeouts here
-                            Ok(_) => {
-                                let el: u128 = n.elapsed().as_millis();
-                                if el > 200 {
-                                    info!(
-                                        "Slow queries on tx: {}ms (~{}/s))",
-                                        el,
-                                        ((1000000000 as f64 / n.elapsed().as_nanos() as f64)
-                                            * (queue::Q_LIMIT as f64 * TX_Q_LEN as f64))
-                                            .round()
-                                    );
-                                }
-                                match tx.commit().await {
-                                    Ok(_) => Ok(()),
+    async fn add_post(
+        &mut self,
+        did: String,
+        rkey: String,
+        timestamp: &i64,
+        is_reply: bool,
+        is_image: bool,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
 
-                                    Err(e) => Err(Error::Transient {
-                                        err: e,
-                                        retry_after: None,
-                                    }),
-                                }
-                            }
-                            Err(e) => Err(Error::Transient {
-                                err: e,
-                                retry_after: None,
-                            }),
-                        }
-                    },
-                )
-                .await
-                {
-                    Ok(_) => {
-                        queue.clear();
-                    }
-                    Err(e) => {
-                        warn!("Error on commit query for {}: {}", name, e);
-                    }
-                };
-                match send.send(()).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            "Something has gone very wrong; unable to send completion channel  {id}: {}",
-                            e
-                        )
-                    }
-                };
-            });
+    async fn add_repost(
+        &mut self,
+        did: String,
+        rkey_parent: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
 
-            return Some(recv);
-        }
-        let key = name + &(queue.len().to_string());
-        queue.insert(key.clone(), qry);
+    async fn add_follow(
+        &mut self,
+        did: String,
+        out: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
 
-        prev_recv
-    }
+    async fn add_like(
+        &mut self,
+        did: String,
+        rkey_parent: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
 
-    pub async fn reset_connection(&mut self) -> Result<(), neo4rs::Error> {
-        self.inner = Graph::connect(self.config.clone()).await?;
-        Ok(())
-    }
+    async fn add_block(
+        &mut self,
+        blockee: String,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
 
+    //////
+    async fn rm_post(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
+
+    async fn rm_repost(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
+
+    async fn rm_follow(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
+
+    async fn rm_like(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
+
+    async fn rm_block(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
+
+    async fn rm_reply(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>>;
+}
+
+impl GraphModel {
     pub async fn new(
         uri: &str,
         replica_uri: &str,
@@ -219,14 +292,13 @@ impl GraphModel {
         };
 
         tokio::spawn(async move {
-            match listen::listen_channel(lock, write_conn, replica, recv).await {
+            match server::listen::listen_channel(lock, write_conn, replica, recv).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };
         });
         let res = Self {
             inner,
-            config,
             tx_queue: Arc::new(DashMap::new()),
             like_queue: Default::default(),
             post_queue: Default::default(),
@@ -244,5 +316,253 @@ impl GraphModel {
         };
 
         Ok(res)
+    }
+}
+
+impl Grapher for GraphModel {
+    async fn add_reply(
+        &mut self,
+        did: String,
+        rkey: String,
+        parent: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = add_to_queue!(self, "reply", rec, did, rkey, parent);
+        resp
+    }
+
+    async fn add_post(
+        &mut self,
+        did: String,
+        rkey: String,
+        timestamp: &i64,
+        is_reply: bool,
+        is_image: bool,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let is_reply = if is_reply {
+            "y".to_owned()
+        } else {
+            "n".to_owned()
+        };
+
+        let is_image = if is_image {
+            "y".to_owned()
+        } else {
+            "n".to_owned()
+        };
+
+        let timestamp = format! {"{timestamp}"};
+
+        let resp = add_to_queue!(self, "post", rec, did, rkey, is_reply, is_image, timestamp);
+        resp
+    }
+
+    async fn add_repost(
+        &mut self,
+        did: String,
+        rkey_parent: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = add_to_queue!(self, "repost", rec, did, rkey, rkey_parent);
+        resp
+    }
+
+    async fn add_follow(
+        &mut self,
+        did: String,
+        out: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = add_to_queue!(self, "follow", rec, out, rkey, did);
+        resp
+    }
+
+    async fn add_block(
+        &mut self,
+        blockee: String,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = add_to_queue!(self, "block", rec, blockee, rkey, did);
+        resp
+    }
+
+    async fn add_like(
+        &mut self,
+        did: String,
+        rkey_parent: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = add_to_queue!(self, "like", rec, did, rkey, rkey_parent);
+        resp
+    }
+
+    async fn rm_post(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = remove_from_queue!("post", rec, self, did, rkey);
+        resp
+    }
+
+    async fn rm_repost(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = remove_from_queue!("repost", rec, self, did, rkey);
+        resp
+    }
+
+    async fn rm_follow(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = remove_from_queue!("follow", rec, self, did, rkey);
+        resp
+    }
+
+    async fn rm_like(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = remove_from_queue!("like", rec, self, did, rkey);
+        resp
+    }
+
+    async fn rm_block(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = remove_from_queue!("block", rec, self, did, rkey);
+        resp
+    }
+
+    async fn rm_reply(
+        &mut self,
+        did: String,
+        rkey: String,
+        rec: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let resp = remove_from_queue!("reply", rec, self, did, rkey);
+        resp
+    }
+
+    async fn enqueue_query(
+        &mut self,
+        name: String,
+        qry: neo4rs::Query,
+        prev_recv: Option<mpsc::Receiver<()>>,
+    ) -> Option<mpsc::Receiver<()>> {
+        let inner = self.inner.clone();
+        let queue = self.tx_queue.clone();
+        if queue.len() > TX_Q_LEN {
+            let n = Instant::now();
+            let (send, recv) = mpsc::channel(1);
+            let id = format!("{:?}", &recv);
+
+            if prev_recv.is_some() {
+                prev_recv.unwrap().recv().await;
+            }
+
+            tokio::spawn(async move {
+                match retry(
+                    ExponentialBackoffBuilder::default()
+                        .with_initial_interval(Duration::from_millis(2))
+                        .with_max_elapsed_time(Some(Duration::from_millis(350)))
+                        .with_randomization_factor(0.35)
+                        .build(),
+                    || async {
+                        let q_vals: Vec<Query> = queue.iter().map(|v| v.value().clone()).collect();
+                        let mut tx = inner.start_txn().await.unwrap();
+                        match tx.run_queries(q_vals).await {
+                            Ok(_) => {
+                                let el: u128 = n.elapsed().as_millis();
+                                if el > 200 {
+                                    info!(
+                                        "Slow queries on tx: {}ms (~{}/s))",
+                                        el,
+                                        ((1000000000 as f64 / n.elapsed().as_nanos() as f64)
+                                            * (Q_LIMIT as f64 * TX_Q_LEN as f64))
+                                            .round()
+                                    );
+                                }
+                                match tx.commit().await {
+                                    Ok(_) => Ok(()),
+
+                                    Err(e) => Err(Error::Transient {
+                                        err: e,
+                                        retry_after: None,
+                                    }),
+                                }
+                            }
+                            Err(e) => Err(Error::Transient {
+                                err: e,
+                                retry_after: None,
+                            }),
+                        }
+                    },
+                )
+                .await
+                {
+                    Ok(_) => {
+                        queue.clear();
+                    }
+                    Err(e) => {
+                        warn!("Error on commit query for {}: {}", name, e);
+                    }
+                };
+                match send.send(()).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!(
+                            "Something has gone very wrong; unable to send completion channel  {id}: {}",
+                            e
+                        )
+                    }
+                };
+            });
+
+            return Some(recv);
+        }
+        let key = name + &(queue.len().to_string());
+        queue.insert(key.clone(), qry);
+
+        prev_recv
+    }
+}
+
+fn get_post_uri(did: String, rkey: String) -> String {
+    format!("at://{did}/app.bsky.feed.post/{rkey}")
+}
+fn pluralize(word: &str) -> String {
+    let word_len = word.len();
+    let snip = &word[..word_len - 1];
+    let last_char = word.chars().nth(word_len - 1).unwrap();
+
+    if last_char == 'y' || word.ends_with("ay") {
+        return format!("{}ies", snip);
+    } else if last_char == 's' || last_char == 'x' || last_char == 'z' {
+        return format!("{}es", word);
+    } else if last_char == 'o' && word.ends_with("o") && !word.ends_with("oo") {
+        return format!("{}oes", snip);
+    } else if last_char == 'u' && word.ends_with("u") {
+        return format!("{}i", snip);
+    } else {
+        return format!("{}s", word);
     }
 }

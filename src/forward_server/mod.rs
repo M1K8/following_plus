@@ -18,7 +18,6 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
 
 use crate::server::types;
-mod auth;
 
 struct StateStruct {
     client: reqwest::Client,
@@ -72,7 +71,9 @@ async fn forward(
     let iss;
     match &bearer {
         Some(s) => {
-            iss = auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned()).unwrap();
+            iss =
+                crate::server::auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned())
+                    .unwrap();
         }
         None => {
             return Response::builder()
@@ -84,12 +85,6 @@ async fn forward(
     info!("Forwarding for user id {}", iss);
     let tok = bearer.unwrap();
     let tok = tok.0 .0.token();
-
-    // TODO - Have caching here; we will return ~ 120 posts at a time, so thats ~ 4 pages (30 are requested at a time)
-    // So use the cursor.
-
-    // Cursor will have 2 components; upstream:downstream. Downstream will be used for paging on this end
-    // While the downstream token will be used as a timestamp based cursor for upstream.
 
     let resp = match state
         .client
@@ -130,7 +125,7 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
         Ok(service_did) => {
             let hostname = env::var("FEEDGEN_HOSTNAME").unwrap_or("".into());
             if !service_did.ends_with(hostname.as_str()) {
-                info!("service_did does not end with hostname");
+                error!("service_did does not end with hostname");
                 return Err(());
             } else {
                 let known_service = types::KnownService {
@@ -147,7 +142,7 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
             }
         }
         Err(_) => {
-            info!("service_did not found");
+            error!("service_did not found");
             return Err(());
         }
     }
