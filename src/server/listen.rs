@@ -93,6 +93,7 @@ pub async fn listen_channel(
                 tokio::spawn(async move {
                     if in_flight.contains(&did) {
                         warn!("Already in flight for {did}, skipping...");
+                        return
                     }
                     info!("Recursively fetching {} follows for {did}", follows.len());
 
