@@ -1,5 +1,5 @@
 use core::error;
-use std::sync::Arc;
+use std::{alloc::System, sync::Arc, time::SystemTime};
 
 use dashmap::DashMap;
 use neo4rs::Graph;
@@ -121,7 +121,10 @@ impl Fetcher {
             //self.cache.insert(msg.did.clone(), leftover);
         }
 
+        let now = SystemTime::now();
         res_vec.sort_unstable();
+        info!("Sorted in {}ms", now.elapsed().unwrap().as_millis());
+
         for v in res_vec.iter() {
             info!("Adding {:?}", v);
         }
@@ -179,6 +182,8 @@ impl Fetcher {
         let qry5 = neo4rs::query(&queries::GET_BEST_FOLLOWED.to_string().replace("{}", &time))
             .param("did", msg.did.clone());
 
+        let now = SystemTime::now();
+
         let res = tokio::try_join!(
             self.read_conn.execute(qry1),
             self.read_conn.execute(qry2),
@@ -186,6 +191,9 @@ impl Fetcher {
             self.read_conn.execute(qry4),
             self.read_conn.execute(qry5)
         );
+
+        info!("Took {} ms to get", now.elapsed().unwrap().as_millis());
+        let now = SystemTime::now();
         let posts = Arc::new(DashMap::new());
         match res {
             Ok((mut l1, mut l2, mut l3, mut l4, mut l5)) => {
@@ -236,7 +244,7 @@ impl Fetcher {
                 return Err(Box::new(e));
             }
         }
-
+        info!("Took {} ms to sort", now.elapsed().unwrap().as_millis());
         Ok(posts)
     }
 }
