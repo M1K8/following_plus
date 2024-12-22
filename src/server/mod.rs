@@ -1,3 +1,4 @@
+use crate::common::FetchMessage;
 use axum::{
     extract::{Query, State},
     http::Method,
@@ -9,24 +10,22 @@ use axum_extra::{
     TypedHeader,
 };
 
-use neo4rs::{ConfigBuilder, Graph};
-use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
-use tokio::{net::TcpListener, sync::mpsc::Sender};
+use hyper::{HeaderMap, StatusCode};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
+use tracing::error;
+use urlencoding::decode;
 
-use crate::common::FetchMessage;
-mod auth;
-mod types;
+pub mod auth;
+pub mod listen;
+pub mod types;
 struct StateStruct {
     send_chan: Sender<FetchMessage>,
-    inner: Graph,
 }
 
-pub async fn serve(
-    chan: Sender<FetchMessage>,
-    inner: Graph,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn serve(chan: Sender<FetchMessage>) -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -36,87 +35,75 @@ pub async fn serve(
             Method::OPTIONS,
         ])
         .allow_origin(Any);
-
     let state = StateStruct {
         send_chan: chan.clone(),
-        inner,
     };
-    let state = Arc::new(state);
     let router = Router::new()
-        .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(index))
-        .route("/xrpc/app.bsky.feed.describeFeedGenerator", get(describe))
-        .route("/.well-known/did.json", get(well_known))
+        .route("/get_feed", get(index))
         .layer(ServiceBuilder::new().layer(cors))
-        .with_state(state);
+        .with_state(Arc::new(state));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
-    let tcp = TcpListener::bind(&addr).await.unwrap();
-
-    axum::serve(tcp, router).await.unwrap();
+    let addr = SocketAddr::from(([0, 0, 0, 0], 29064));
+    axum_server::bind(addr)
+        .serve(router.into_make_service())
+        .await
+        .unwrap();
     Ok(())
 }
 
 async fn index(
+    _headers: HeaderMap,
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
-    State(_state): State<Arc<StateStruct>>,
-) -> Result<types::Response, ()> {
-    let auth;
-    println!("{:?}", params);
-    match bearer {
+    State(state): State<Arc<StateStruct>>,
+) -> Result<Json<types::Response>, axum::http::StatusCode> {
+    let did = match bearer {
         Some(s) => {
-            auth = s.0 .0.token();
-            auth::verify_jwt(auth, &"".to_owned()).unwrap();
+            let s = decode(s.0 .0.token()).unwrap().into_owned();
+            auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
-        None => {}
+        None => {
+            error!("No Header - cant do auth!");
+            return Err(axum::http::StatusCode::NOT_FOUND);
+        }
+    };
+    let cursor;
+    if let Some(c) = params.get("cursor") {
+        cursor = Some(c.clone());
+    } else {
+        cursor = None;
     }
 
-    Ok(types::Response {
-        cursor: None,
-        feed: vec![types::Post {
-            post: "at://did:plc:zxs7h3vusn4chpru4nvzw5sj/app.bsky.feed.post/3lbdbqqdxxc2w"
-                .to_owned(),
-        }],
-    })
-}
+    let (resp, mut recv) = tokio::sync::mpsc::channel(1);
+    state
+        .send_chan
+        .send(FetchMessage { did, cursor, resp })
+        .await
+        .unwrap();
 
-// This needs to be exposed on port 443 too
-async fn well_known() -> Result<Json<types::WellKnown>, ()> {
-    match env::var("FEEDGEN_SERVICE_DID") {
-        Ok(service_did) => {
-            let hostname = env::var("FEEDGEN_HOSTNAME").unwrap_or("".into());
-            if !service_did.ends_with(hostname.as_str()) {
-                println!("service_did does not end with hostname");
-                return Err(());
-            } else {
-                let known_service = types::KnownService {
-                    id: "#bsky_fg".to_owned(),
-                    r#type: "BskyFeedGenerator".to_owned(),
-                    service_endpoint: format!("https://{}", hostname),
-                };
-                let result = types::WellKnown {
-                    context: vec!["https://www.w3.org/ns/did/v1".into()],
-                    id: service_did,
-                    service: vec![known_service],
-                };
-                return Ok(Json(result));
-            }
+    let resp;
+    tokio::select! {
+        _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
+            error!("timed out waiting for response from graph worker");
+            return Err(StatusCode::REQUEST_TIMEOUT)
         }
-        Err(_) => {
-            println!("service_did not found");
-            return Err(());
+        r = recv.recv() => {
+            resp = r;
         }
     }
-}
 
-async fn describe() -> Result<Json<types::Describe>, ()> {
-    let hostname = env::var("FEEDGEN_HOSTNAME").unwrap();
-    let dezscribe = types::Describe {
-        did: format!("did:web:{hostname}"),
-        feeds: vec![types::Feed {
-            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/m1k_test_feed"),
-        }],
+    let resp = match resp {
+        Some(r) => r,
+        None => {
+            error!("nil response from channel");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     };
 
-    Ok(Json(dezscribe))
+    let posts: Vec<types::Post> = resp.posts.iter().map(|p| p.into()).collect();
+
+    Ok(Json(types::Response {
+        cursor: resp.cursor,
+        feed: posts,
+    }))
 }
