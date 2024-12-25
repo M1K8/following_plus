@@ -2,7 +2,6 @@ use common::FetchMessage;
 use graph::GraphModel;
 use pprof::protos::Message;
 use simple_moving_average::{SumTreeSMA, SMA};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, mem, process};
@@ -13,6 +12,7 @@ use tracing_subscriber;
 
 pub mod bsky;
 pub mod common;
+mod event_storer;
 mod forward_server;
 pub mod graph;
 mod server;

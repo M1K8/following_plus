@@ -102,7 +102,7 @@ pub struct ImageInternal {
     #[serde(rename = "$type")]
     pub type_field: Option<String>,
     #[serde(rename = "ref")]
-    pub reff: Ref,
+    pub reff: Option<Ref>,
     pub mime_type: String,
     pub size: u64,
 }

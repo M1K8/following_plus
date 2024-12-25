@@ -1,4 +1,4 @@
-use crate::{bsky::types::*, graph::Grapher};
+use crate::{bsky::types::*, event_storer::EventStorer};
 use chrono::Utc;
 use hyper::StatusCode;
 use once_cell::sync::Lazy;
@@ -42,7 +42,7 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
 
 pub async fn handle_event_fast(
     evt: &[u8],
-    g: &mut impl Grapher,
+    g: &mut impl EventStorer,
     mut rec: Option<mpsc::Receiver<()>>,
     compressed: bool,
 ) -> Result<(i64, Option<mpsc::Receiver<()>>), Box<dyn std::error::Error>> {

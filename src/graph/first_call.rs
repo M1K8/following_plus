@@ -77,6 +77,13 @@ pub async fn get_blocks(
     Ok(())
 }
 
+// TODO - Move all this outside of graph, & find a way to traitify Graph (wrap it with a struct that encapsulates - then we can test / pkg out various bits)
+// Decouple as much as possible - for example the following could wrap the content of the retry() call as a lib call; with the benefit of traiting the write call
+// Also consider components that can be repruposed; for example, event ingest flow can potentially attach "middlewares" that could be used for analysis
+// and/or filtering; to prevent nfsw for example
+// Also TODO - return DID's involved for logging to determine any common links / ability to build metrics
+// though we're likely to junk the current queries anyway tbh
+// ...on this note, spin off seperate thread(s) to handle tokenising posts? Could be used to determine trending etc. We have enough cpu to go around :shrug:
 pub async fn write_follows(
     follows: Arc<DashSet<(String, String, String)>>,
     conn: &Graph,

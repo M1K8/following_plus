@@ -1,4 +1,5 @@
 use crate::common::FetchMessage;
+use crate::event_storer::EventStorer;
 use crate::server;
 use backoff::future::retry;
 use backoff::{Error, ExponentialBackoffBuilder};
@@ -16,6 +17,7 @@ pub mod fetcher;
 pub mod first_call;
 pub mod queries;
 
+// Implement EventStorer
 pub struct GraphModel {
     inner: Graph,
     like_queue: Vec<HashMap<String, String>>,
@@ -59,7 +61,7 @@ macro_rules! add_to_queue {
         if queue.0.len() >= Q_LIMIT {
             // Move queue values without copying
             let qry = neo4rs::query(queue.1).param(&pluralize($query_name), mem::take(queue.0));
-            let resp = Grapher::enqueue_query($self,$query_name.to_string(), qry, $recv).await;
+            let resp = $self.enqueue_query($query_name.to_string(), qry, $recv).await;
             return resp
         }
 
@@ -90,115 +92,12 @@ macro_rules! remove_from_queue {
         if queue.0.len() >= Q_LIMIT {
             // Move queue values without copying
             let qry = neo4rs::query(queue.1).param(&pluralize($query_name), mem::take(queue.0));
-            let resp = Grapher::enqueue_query($self,$query_name.to_string(), qry, $recv).await;
+            let resp = $self.enqueue_query($query_name.to_string(), qry, $recv).await;
             return resp
         }
 
         $recv // we havent used the channel, so just pass it back up
     }};
-}
-
-#[trait_variant::make(Grapher: Send)]
-pub trait LocalGrapher {
-    async fn enqueue_query(
-        &mut self,
-        name: String,
-        qry: neo4rs::Query,
-        prev_recv: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn add_reply(
-        &mut self,
-        did: String,
-        rkey: String,
-        parent: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn add_post(
-        &mut self,
-        did: String,
-        rkey: String,
-        timestamp: &i64,
-        is_reply: bool,
-        is_image: bool,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn add_repost(
-        &mut self,
-        did: String,
-        rkey_parent: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn add_follow(
-        &mut self,
-        did: String,
-        out: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn add_like(
-        &mut self,
-        did: String,
-        rkey_parent: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn add_block(
-        &mut self,
-        blockee: String,
-        did: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    //////
-    async fn rm_post(
-        &mut self,
-        did: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn rm_repost(
-        &mut self,
-        did: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn rm_follow(
-        &mut self,
-        did: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn rm_like(
-        &mut self,
-        did: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn rm_block(
-        &mut self,
-        did: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
-
-    async fn rm_reply(
-        &mut self,
-        did: String,
-        rkey: String,
-        rec: Option<mpsc::Receiver<()>>,
-    ) -> Option<mpsc::Receiver<()>>;
 }
 
 impl GraphModel {
@@ -319,7 +218,7 @@ impl GraphModel {
     }
 }
 
-impl Grapher for GraphModel {
+impl EventStorer for GraphModel {
     async fn add_reply(
         &mut self,
         did: String,
