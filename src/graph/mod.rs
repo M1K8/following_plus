@@ -2,10 +2,11 @@ use crate::common::FetchMessage;
 use crate::event_storer::EventStorer;
 use crate::server;
 use backoff::future::retry;
-use backoff::{Error, ExponentialBackoffBuilder};
+use backoff::ExponentialBackoffBuilder;
 use dashmap::DashMap;
 use neo4rs::{ConfigBuilder, Graph, Query};
 use std::env;
+use std::error::Error;
 use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,6 +17,15 @@ use tracing::{error, info, warn};
 pub mod fetcher;
 pub mod first_call;
 pub mod queries;
+
+pub trait EventDatabase {
+    fn connect() -> Result<Self, Box<dyn Error>> where Self: Sized;
+    // Wrap graph - ezpz
+    
+
+}
+
+
 
 // Implement EventStorer
 pub struct GraphModel {
@@ -403,13 +413,13 @@ impl EventStorer for GraphModel {
                                 match tx.commit().await {
                                     Ok(_) => Ok(()),
 
-                                    Err(e) => Err(Error::Transient {
+                                    Err(e) => Err(backoff::Error::Transient {
                                         err: e,
                                         retry_after: None,
                                     }),
                                 }
                             }
-                            Err(e) => Err(Error::Transient {
+                            Err(e) => Err(backoff::Error::Transient {
                                 err: e,
                                 retry_after: None,
                             }),
