@@ -93,7 +93,7 @@ pub struct Feature {
 pub struct Image {
     pub alt: Option<String>,
     pub aspect_ratio: Option<HashMap<String, String>>,
-    pub image: Option<ImageInternal>,
+    pub image: Option<Img>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -158,6 +158,13 @@ pub struct Subject {
 pub enum Subj {
     T1(String),
     T2(Subject),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Img {
+    T1(String),
+    T2(ImageInternal),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

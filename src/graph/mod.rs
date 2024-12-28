@@ -1,5 +1,5 @@
 use crate::common::FetchMessage;
-use crate::event_storer::EventStorer;
+use crate::at_event_processor::ATEventProcessor;
 use crate::server;
 use backoff::future::retry;
 use backoff::ExponentialBackoffBuilder;
@@ -19,13 +19,21 @@ pub mod first_call;
 pub mod queries;
 
 pub trait EventDatabase {
-    fn connect() -> Result<Self, Box<dyn Error>> where Self: Sized;
-    // Wrap graph - ezpz
-    
-
+    fn connect() -> Result<Self, Box<dyn Error>>
+    where
+        Self: Sized;
+    fn read<T>(&mut self, query: HashMap<String, String>) -> Result<T, Box<dyn Error>>
+    where
+        T: serde::de::DeserializeOwned;
+    fn write(&mut self, query: HashMap<String, String>) -> Option<Box<dyn Error>>;
+    fn batch_write(&mut self, queries: Vec<HashMap<String, String>>) -> Option<Box<dyn Error>>;
+    fn batch_read<T>(
+        &mut self,
+        queries: Vec<HashMap<String, String>>,
+    ) -> Result<Vec<T>, Box<dyn Error>>
+    where
+        T: serde::de::DeserializeOwned;
 }
-
-
 
 // Implement EventStorer
 pub struct GraphModel {
@@ -228,7 +236,7 @@ impl GraphModel {
     }
 }
 
-impl EventStorer for GraphModel {
+impl ATEventProcessor for GraphModel {
     async fn add_reply(
         &mut self,
         did: String,

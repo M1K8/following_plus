@@ -12,7 +12,7 @@ use tracing_subscriber;
 
 pub mod bsky;
 pub mod common;
-mod event_storer;
+mod at_event_processor;
 mod forward_server;
 pub mod graph;
 mod server;
