@@ -1,15 +1,18 @@
-use crate::{bsky::types::*, at_event_processor::ATEventProcessor};
+use crate::{
+    at_event_processor::{ATEventProcessor, MaybeSemaphore},
+    bsky::types::*,
+};
 use chrono::Utc;
 use hyper::StatusCode;
 use once_cell::sync::Lazy;
+use serde::de::DeserializeOwned;
 
 use std::collections::HashSet;
 use std::mem;
-use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use zstd::bulk::Decompressor;
 
-mod types;
+pub mod types;
 
 const DICT: &'static [u8; 112640] = include_bytes!("./dictionary");
 static mut DECOMP: Lazy<Decompressor<'static>> =
@@ -43,9 +46,9 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
 pub async fn handle_event_fast(
     evt: &[u8],
     g: &mut impl ATEventProcessor,
-    mut rec: Option<mpsc::Receiver<()>>,
+    mut rec: MaybeSemaphore,
     compressed: bool,
-) -> Result<(i64, Option<mpsc::Receiver<()>>), Box<dyn std::error::Error>> {
+) -> Result<(i64, MaybeSemaphore), Box<dyn std::error::Error>> {
     let mut spam = HashSet::new();
     spam.insert("did:plc:xdx2v7gyd5dmfqt7v77gf457".to_owned());
     spam.insert("did:plc:a56vfzkrxo2bh443zgjxr4ix".to_owned());
@@ -97,7 +100,7 @@ pub async fn handle_event_fast(
                                 if now - t.timestamp_micros()
                                     > chrono::Duration::hours(24).num_microseconds().unwrap()
                                 {
-                                    //warn!("Post older than 24 hours: {t}");
+                                    // People like to backfill, so ignore these *TODO - Middleware ting
                                     return Ok((0, rec));
                                 }
                                 t.timestamp_micros()
@@ -247,22 +250,29 @@ fn get_rkey(commit: &Commit) -> String {
     rkey_out
 }
 
-pub async fn get_follows(
+pub trait Recordable<V: Subjectable> {
+    fn records(&self) -> &Vec<V>;
+    fn cursor(&self) -> &Option<String>;
+}
+
+pub trait Subjectable {
+    fn subject(&self) -> &str;
+    fn uri(&self) -> &str;
+}
+
+async fn get<V: Subjectable, T: DeserializeOwned + Recordable<V>>(
+    uri: &str,
     did: String,
     client: reqwest::Client,
 ) -> Result<Vec<(String, String)>, (reqwest::Error, Option<StatusCode>)> {
-    info!("Getting follows for {:?}", did);
-    let base_url = format!(
-        "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.follow&limit=100"
-    );
-    let mut follows: Vec<(String, String)> = Vec::new();
-    let mut req = match client.get(&base_url).build() {
+    let mut res: Vec<(String, String)> = Vec::new();
+    let mut req = match client.get(uri).build() {
         Ok(r) => r,
         Err(e) => {
             return Err((e, None));
         }
     };
-    let mut resp: FollowsResp = match client.execute(req).await {
+    let mut resp: T = match client.execute(req).await {
         Ok(resp) => {
             let status = resp.status();
             match resp.json().await {
@@ -280,14 +290,14 @@ pub async fn get_follows(
     };
 
     loop {
-        for f in &mut resp.records {
-            let subject = mem::take(&mut f.value.subject); // yoink the string, not gonna need it anymore in the vec anyway
-            let rkey = parse_rkey(&f.uri);
-            follows.push((subject, rkey));
+        for f in resp.records() {
+            let subject = f.subject();
+            let rkey = parse_rkey(&f.uri());
+            res.push((subject.to_owned(), rkey));
         }
-        match &resp.cursor {
+        match &resp.cursor() {
             Some(c) => {
-                let url = base_url.clone() + format!("&cursor={}", c).as_str();
+                let url = uri.to_owned() + format!("&cursor={}", c).as_str();
                 req = match client.get(&url).build() {
                     Ok(r) => r,
                     Err(ee) => return Err((ee, None)),
@@ -295,7 +305,12 @@ pub async fn get_follows(
                 let r = match client.execute(req).await {
                     Ok(r) => r,
                     Err(e) => {
-                        warn!("Error fetching follows for {} {:?}", &did, e);
+                        warn!(
+                            "Error fetching {} for {} {:?}",
+                            std::any::type_name::<T>(),
+                            &did,
+                            e
+                        );
                         continue;
                     }
                 };
@@ -304,7 +319,13 @@ pub async fn get_follows(
                 resp = match r.json().await {
                     Ok(r) => r,
                     Err(e) => {
-                        warn!("Error getting follows for {}: {} : {:?}", did, rr, e);
+                        warn!(
+                            "Error getting {} for {}: {} : {:?}",
+                            std::any::type_name::<T>(),
+                            did,
+                            rr,
+                            e
+                        );
                         break;
                     }
                 };
@@ -315,63 +336,27 @@ pub async fn get_follows(
         }
     }
 
-    Ok(follows)
+    Ok(res)
+}
+
+pub async fn get_follows(
+    did: String,
+    client: reqwest::Client,
+) -> Result<Vec<(String, String)>, (reqwest::Error, Option<StatusCode>)> {
+    info!("Getting follows for {:?}", did);
+    let base_url = format!(
+        "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.follow&limit=100"
+    );
+    get::<Follow, FollowsResp>(&base_url, did, client).await
 }
 
 pub async fn get_blocks(
     did: String,
     client: reqwest::Client,
-) -> Result<Vec<(String, String)>, reqwest::Error> {
+) -> Result<Vec<(String, String)>, (reqwest::Error, Option<StatusCode>)> {
     info!("Getting blocks for {:?}", did);
     let base_url = format!(
         "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.block&limit=100"
     );
-    let mut blocks: Vec<(String, String)> = Vec::new();
-    let mut req = match client.get(&base_url).build() {
-        Ok(r) => r,
-        Err(e) => {
-            info!("req {:?}", e);
-            return Err(e);
-        }
-    };
-    let mut resp: FollowsResp = match client.execute(req).await?.json().await {
-        Ok(r) => r,
-        Err(e) => {
-            info!("resp {:?}", e);
-            return Err(e);
-        }
-    };
-
-    loop {
-        for f in &mut resp.records {
-            let subject = mem::take(&mut f.value.subject); // yoink the string, not gonna need it anymore in the vec anyway
-            let rkey = parse_rkey(&f.uri);
-            blocks.push((subject, rkey));
-        }
-        match &resp.cursor {
-            Some(c) => {
-                let url = base_url.clone() + format!("&cursor={}", c).as_str();
-                req = client.get(&url).build()?;
-                let r = match client.execute(req).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        warn!("Error fetching blocks for {} {:?}", &did, e);
-                        continue;
-                    }
-                };
-                resp = match r.json().await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        warn!("Error parsing blocks for {} {:?}", did, e);
-                        continue;
-                    }
-                };
-            }
-            None => {
-                break;
-            }
-        }
-    }
-
-    Ok(blocks)
+    get::<Block, BlocksResp>(&base_url, did, client).await
 }

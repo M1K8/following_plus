@@ -1,5 +1,6 @@
+use at_event_processor::MaybeSemaphore;
 use common::FetchMessage;
-use graph::GraphModel;
+use graph::memgraph::MemgraphWrapper;
 use pprof::protos::Message;
 use simple_moving_average::{SumTreeSMA, SMA};
 use std::sync::Arc;
@@ -10,9 +11,10 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
+mod at_event_processor;
 pub mod bsky;
 pub mod common;
-mod at_event_processor;
+mod event_database;
 mod forward_server;
 pub mod graph;
 mod server;
@@ -74,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lock = Arc::new(RwLock::new(()));
     let (send, recv) = mpsc::channel::<FetchMessage>(100);
     info!("Connecting to memgraph");
-    let mut graph = GraphModel::new(
+    let mut graph = MemgraphWrapper::new(
         "bolt://localhost:7687",
         "bolt://localhost:7688",
         &user,
@@ -126,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     let mut last_time = SystemTime::now();
-    let mut recv: Option<mpsc::Receiver<()>> = None; // Has to be an option otherwise mem::take wont work (bc it implements default())
+    let mut recv: MaybeSemaphore = None; // Has to be an option otherwise mem::take wont work (bc it implements default())
 
     loop {
         match tokio::select! {

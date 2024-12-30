@@ -3,18 +3,73 @@ use std::collections::HashMap;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
+use super::Recordable;
+use super::Subjectable;
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FollowsResp {
     pub cursor: Option<String>,
     pub records: Vec<Follow>,
 }
+impl Recordable<Follow> for FollowsResp {
+    fn records(&self) -> &Vec<Follow> {
+        &self.records
+    }
+
+    fn cursor(&self) -> &Option<String> {
+        &self.cursor
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Follow {
     pub uri: String,
     pub cid: String,
     pub value: FollowVal,
+}
+
+impl Subjectable for Follow {
+    fn subject(&self) -> &str {
+        &self.value.subject
+    }
+    fn uri(&self) -> &str {
+        &self.uri
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Block {
+    pub uri: String,
+    pub cid: String,
+    pub value: FollowVal,
+}
+
+impl Subjectable for Block {
+    fn subject(&self) -> &str {
+        &self.value.subject
+    }
+    fn uri(&self) -> &str {
+        &self.uri
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlocksResp {
+    pub cursor: Option<String>,
+    pub records: Vec<Block>,
+}
+impl Recordable<Block> for BlocksResp {
+    fn records(&self) -> &Vec<Block> {
+        &self.records
+    }
+
+    fn cursor(&self) -> &Option<String> {
+        &self.cursor
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -172,4 +227,22 @@ pub enum Img {
 pub enum Embd {
     T1(String),
     T2(Subject),
+}
+
+#[derive(Debug)]
+pub struct RecNotFound {}
+
+impl std::fmt::Display for RecNotFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RecordNotFound")
+    }
+}
+
+impl core::error::Error for RecNotFound {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
+    }
 }
