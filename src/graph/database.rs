@@ -94,8 +94,9 @@ impl EventDatabase<HashMap<String, PostMsg>> for GraphFetcher {
     async fn chunk_write(
         &mut self,
         query: &str,
-        params: Vec<HashMap<String, &[HashMap<String, String>]>>,
+        params: Vec<HashMap<String, String>>,
         chunk_size: usize,
+        param_name: &str,
     ) -> Option<Box<dyn std::error::Error>> {
         let len = params.len();
         let chunks;
@@ -107,7 +108,7 @@ impl EventDatabase<HashMap<String, PostMsg>> for GraphFetcher {
 
         let mut qrys = Vec::new();
         for follow_chunk in chunks {
-            let qry = neo4rs::query(query).param("follows", follow_chunk);
+            let qry = neo4rs::query(query).param(param_name, follow_chunk);
             qrys.push(qry);
         }
 

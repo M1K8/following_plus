@@ -23,8 +23,9 @@ pub trait EventDatabase<T: DeserializeOwned> {
     async fn chunk_write(
         &mut self,
         query: &str,
-        params: Vec<HashMap<String, &[HashMap<String, String>]>>,
+        params: Vec<HashMap<String, String>>,
         chunk_size: usize,
+        param_name: &str,
     ) -> Option<Box<dyn Error>>;
     async fn batch_read(
         &mut self,

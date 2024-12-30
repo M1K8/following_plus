@@ -427,20 +427,11 @@ async fn chunk_and_write_follows(
             ])
         })
         .collect();
-    let len = follow_chunks.len();
-    let chunks;
-    if len < 20 as usize {
-        chunks = follow_chunks.chunks(1).collect::<Vec<_>>();
-    } else {
-        chunks = follow_chunks.chunks(len / 20).collect::<Vec<_>>();
-    }
-
-    let mut params = Vec::new();
-    for follow_chunk in chunks {
-        params.push(HashMap::from([("follows".to_owned(), follow_chunk)]));
-    }
     let l = write_lock.write().await;
-    let r = match conn.chunk_write(queries::POPULATE_FOLLOW, params, 20).await {
+    let r = match conn
+        .chunk_write(queries::POPULATE_FOLLOW, follow_chunks, 20, "follows")
+        .await
+    {
         Some(e) => Some(e),
         None => None,
     };
