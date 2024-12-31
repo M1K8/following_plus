@@ -11,24 +11,24 @@ pub trait EventDatabase<T: DeserializeOwned> {
         params: Option<HashMap<String, String>>,
     ) -> Result<T, Box<dyn Error>>;
     async fn write(
-        &mut self,
+        &self,
         query: &str,
         params: Option<HashMap<String, String>>,
     ) -> Option<Box<dyn Error>>;
     async fn batch_write(
-        &mut self,
+        &self,
         queries: Vec<&str>,
         params: Vec<Option<HashMap<String, String>>>,
     ) -> Option<Box<dyn Error>>;
     async fn chunk_write(
-        &mut self,
+        &self,
         query: &str,
         params: Vec<HashMap<String, String>>,
         chunk_size: usize,
         param_name: &str,
     ) -> Option<Box<dyn Error>>;
     async fn batch_read(
-        &mut self,
+        &self,
         queries: Vec<&str>,
         params: Vec<Option<HashMap<String, String>>>,
     ) -> Result<Vec<T>, Box<dyn Error>>;

@@ -100,7 +100,7 @@ pub async fn handle_event_fast(
                                 if now - t.timestamp_micros()
                                     > chrono::Duration::hours(24).num_microseconds().unwrap()
                                 {
-                                    // People like to backfill, so ignore these *TODO - Middleware ting
+                                    // People like to backfill, so ignore these
                                     return Ok((0, rec));
                                 }
                                 t.timestamp_micros()

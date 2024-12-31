@@ -2,12 +2,9 @@ use std::{collections::HashMap, time::Duration};
 
 use backoff::{future::retry, ExponentialBackoffBuilder};
 use neo4rs::Graph;
-use rustls::crypto::hash::Hash;
 use tracing::{error, info, warn};
 
 use crate::{common::PostMsg, event_database::EventDatabase};
-
-use super::queries;
 
 macro_rules! process_next {
     ($next_expr:expr, $posts_expr:expr, $reason:expr) => {
@@ -72,7 +69,7 @@ impl EventDatabase<HashMap<String, PostMsg>> for GraphFetcher {
     }
 
     async fn write(
-        &mut self,
+        &self,
         query: &str,
         params: Option<HashMap<String, String>>,
     ) -> Option<Box<dyn std::error::Error>> {
@@ -92,7 +89,7 @@ impl EventDatabase<HashMap<String, PostMsg>> for GraphFetcher {
     }
 
     async fn chunk_write(
-        &mut self,
+        &self,
         query: &str,
         params: Vec<HashMap<String, String>>,
         chunk_size: usize,
@@ -148,7 +145,7 @@ impl EventDatabase<HashMap<String, PostMsg>> for GraphFetcher {
     }
 
     async fn batch_write(
-        &mut self,
+        &self,
         queries: Vec<&str>,
         params: Vec<Option<HashMap<String, String>>>,
     ) -> Option<Box<dyn std::error::Error>> {
@@ -206,7 +203,7 @@ impl EventDatabase<HashMap<String, PostMsg>> for GraphFetcher {
     }
 
     async fn batch_read(
-        &mut self,
+        &self,
         queries: Vec<&str>,
         params: Vec<Option<HashMap<String, String>>>,
     ) -> Result<Vec<HashMap<String, PostMsg>>, Box<dyn std::error::Error>> {

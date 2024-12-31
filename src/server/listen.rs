@@ -1,17 +1,15 @@
 use core::error;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::SystemTime;
 use std::{mem, sync::Arc, time::Duration};
 
-use backoff::future::retry;
-use backoff::ExponentialBackoffBuilder;
 use dashmap::DashSet;
 use futures::stream::{FuturesUnordered, StreamExt};
 use hyper::StatusCode;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{mpsc, RwLock};
 use tokio::task::JoinSet;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::bsky::types::RecNotFound;
 use crate::common::{FetchMessage, PostMsg, PostResp};
@@ -72,24 +70,52 @@ pub async fn listen_for_requests<T: EventDatabase<HashMap<String, PostMsg>> + Cl
             cursor = now();
         }
 
-        // Follows
-        let did = msg.did.clone();
-        let cl_follows = client.clone();
-
         // Blocks
         let did_blocks = msg.did.clone();
         if !seen_map.contains(&did_blocks) {
             let cl_blocks = client.clone();
+            let block_chunks: Option<Vec<HashMap<String, String>>>;
             match get_blocks(&did_blocks, cl_blocks).await {
-                Ok(_b) => {
-                    //TODO - Write blocks
+                Ok(b) => {
+                    block_chunks = Some(
+                        b.iter()
+                            .map(|vals| {
+                                HashMap::from([
+                                    ("out".to_owned(), vals.0.clone()),
+                                    ("did".to_owned(), did_blocks.clone()),
+                                    ("rkey".to_owned(), vals.1.clone()),
+                                ])
+                            })
+                            .collect(),
+                    );
                 }
                 Err(e) => {
                     warn!("Error getting blocks for {}: {}", &msg.did, e);
+                    block_chunks = None
                 }
             };
-            seen_map.insert(did_blocks);
+
+            match block_chunks {
+                Some(b) => {
+                    match writer
+                        .chunk_write(queries::POPULATE_BLOCK, b, 60, "blocks")
+                        .await
+                    {
+                        Some(e) => {
+                            error!("Error adding blocks for {}: {}", &msg.did, e);
+                        }
+                        None => {
+                            seen_map.insert(did_blocks);
+                        }
+                    };
+                }
+                None => {}
+            }
         }
+
+        // Follows
+        let did = msg.did.clone();
+        let cl_follows = client.clone();
 
         match get_follows(&did, cl_follows).await {
             Ok(follows) => {
@@ -201,10 +227,7 @@ pub async fn listen_for_requests<T: EventDatabase<HashMap<String, PostMsg>> + Cl
                 in_flight.remove(&msg.did);
             }
         };
-        match fetch_and_return_posts(fetcher.clone(), msg, &cursor).await {
-            Ok(_) => {}
-            Err(_) => continue,
-        }
+        _ = fetch_and_return_posts(fetcher.clone(), msg, &cursor).await;
     }
 }
 
@@ -414,7 +437,7 @@ async fn get_blocks(
 
 async fn chunk_and_write_follows(
     follows: Arc<DashSet<(String, String, String)>>,
-    mut conn: impl EventDatabase<HashMap<String, PostMsg>> + Clone,
+    conn: impl EventDatabase<HashMap<String, PostMsg>> + Clone,
     write_lock: Arc<RwLock<()>>,
 ) -> Option<Box<dyn error::Error>> {
     let follow_chunks: Vec<HashMap<String, String>> = follows

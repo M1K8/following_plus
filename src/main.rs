@@ -52,7 +52,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(_) => {}
             };
-            //TODO Exit properly
             process::exit(0x0100);
         })
         .expect("Error setting Ctrl-C handler");

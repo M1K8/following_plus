@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
+use crate::bsky::types::BskyEvent;
+
 pub type MaybeSemaphore = Option<mpsc::Receiver<()>>;
 
 #[trait_variant::make(Send)]
 pub trait ATEventProcessor {
+    fn get_filters(&self) -> &Vec<fn(&BskyEvent) -> bool>;
     async fn enqueue_query(
         &mut self,
         name: String,

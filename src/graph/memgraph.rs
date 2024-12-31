@@ -1,4 +1,5 @@
 use crate::at_event_processor::ATEventProcessor;
+use crate::bsky::types::BskyEvent;
 use crate::common::FetchMessage;
 use crate::server;
 use backoff::future::retry;
@@ -95,6 +96,8 @@ pub struct MemgraphWrapper {
     rm_block_queue: Vec<HashMap<String, String>>,
 
     tx_queue: Arc<DashMap<String, Query>>,
+
+    filters: Vec<fn(&BskyEvent) -> bool>,
 }
 
 impl MemgraphWrapper {
@@ -212,6 +215,8 @@ impl MemgraphWrapper {
             rm_repost_queue: Default::default(),
             rm_block_queue: Default::default(),
             rm_reply_queue: Default::default(),
+
+            filters: vec![],
         };
 
         Ok(res)
@@ -452,5 +457,9 @@ impl ATEventProcessor for MemgraphWrapper {
     ) -> Option<mpsc::Receiver<()>> {
         let resp = queue_event_remove!("reply", rec, self, did, rkey);
         resp
+    }
+
+    fn get_filters(&self) -> &Vec<fn(&BskyEvent) -> bool> {
+        &self.filters
     }
 }
