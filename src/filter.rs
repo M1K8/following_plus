@@ -36,8 +36,8 @@ pub fn date_filter(m: &BskyEvent) -> bool {
                     match chrono::DateTime::parse_from_rfc3339(&r.created_at) {
                         Ok(t) => {
                             println!("Time diff: {}us", !Utc::now().timestamp_micros() - t.timestamp_micros());
-                            let v =  !Utc::now().timestamp_micros() - t.timestamp_micros()
-                                > chrono::Duration::hours(24).num_microseconds().unwrap();
+                            let v =  Utc::now().timestamp_micros() - t.timestamp_micros()
+                                < chrono::Duration::hours(24).num_microseconds().unwrap();
                                 return v;
                         }
                         Err(_) => {
