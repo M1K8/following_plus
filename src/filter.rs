@@ -35,14 +35,14 @@ pub fn date_filter(m: &BskyEvent) -> bool {
                 Some(r) => {
                     match chrono::DateTime::parse_from_rfc3339(&r.created_at) {
                         Ok(t) => {
-                            println!("Time diff: {}us", !Utc::now().timestamp_micros() - t.timestamp_micros());
+                            println!("Time diff: {}us", Utc::now().timestamp_micros() - t.timestamp_micros());
                             let v =  Utc::now().timestamp_micros() - t.timestamp_micros()
                                 < chrono::Duration::hours(24).num_microseconds().unwrap();
                                 return v;
                         }
                         Err(_) => {
-                            let v =  !Utc::now().timestamp_micros() - m.time_us
-                                > chrono::Duration::hours(24).num_microseconds().unwrap();
+                            let v =  !(Utc::now().timestamp_micros() - m.time_us
+                                > chrono::Duration::hours(24).num_microseconds().unwrap());
                                 return v;
                         } // if we cant find this field, just use the time the event was emitted
                     };
