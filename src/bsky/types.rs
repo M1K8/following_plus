@@ -173,7 +173,7 @@ pub struct Feature {
 #[serde(rename_all = "camelCase")]
 pub struct Image {
     pub alt: Option<String>,
-    pub aspect_ratio: Option<HashMap<Inconsistent, Inconsistent>>,
+    pub aspect_ratio: Option<HashMap<i64, i64>>,
     pub image: Option<Img>,
 }
 
@@ -239,13 +239,6 @@ pub struct Subject {
 pub enum Subj {
     T1(String),
     T2(Subject),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Inconsistent {
-    T1(String),
-    T2(i64),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
