@@ -74,7 +74,6 @@ pub async fn handle_event_fast(
         Some(f) => {
             for func in f {
                 if !func.check(&deser_evt) {
-                    info!("Global filter filtered!");
                     return Ok((0, rec));
                 }
             }
