@@ -1,21 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use tokio::sync::mpsc;
 
-use crate::bsky::types::BskyEvent;
+use crate::{bsky::types::ATEventType, filter::Filter};
 
 pub type MaybeSemaphore = Option<mpsc::Receiver<()>>;
 
 #[trait_variant::make(Send)]
 pub trait ATEventProcessor {
-    fn get_filters(&self) -> &Vec<fn(&BskyEvent) -> bool>;
-    async fn enqueue_query(
-        &mut self,
-        name: String,
-        query_script: Option<&str>,
-        params: (&str, Vec<HashMap<String, String>>),
-        prev_recv: MaybeSemaphore,
-    ) -> MaybeSemaphore;
-
+    fn get_filters(&self) -> &HashMap<ATEventType, VecDeque<Box<dyn Filter + Send>>>;
+    ///
     async fn add_reply(
         &mut self,
         did: String,

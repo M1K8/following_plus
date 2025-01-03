@@ -6,8 +6,6 @@ use chrono::Utc;
 use hyper::StatusCode;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
-
-use std::collections::HashSet;
 use std::mem;
 use tracing::{error, info, warn};
 use zstd::bulk::Decompressor;
@@ -25,7 +23,7 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
         Some(p) => p,
         None => panic!("Decompressor is undefined?"),
     };
-    let msg = dec_ptr.decompress(m, 819200); // 80kb
+    let msg = dec_ptr.decompress(m, 819200);
     match msg {
         Ok(m) => {
             match serde_json::from_slice(m.as_slice()) {
@@ -49,14 +47,7 @@ pub async fn handle_event_fast(
     mut rec: MaybeSemaphore,
     compressed: bool,
 ) -> Result<(i64, MaybeSemaphore), Box<dyn std::error::Error>> {
-    let mut spam = HashSet::new();
-    spam.insert("did:plc:xdx2v7gyd5dmfqt7v77gf457".to_owned());
-    spam.insert("did:plc:a56vfzkrxo2bh443zgjxr4ix".to_owned());
-    spam.insert("did:plc:cov6pwd7ajm2wgkrgbpej2f3".to_owned());
-    spam.insert("did:plc:fcnbisw7xl6lmtcnvioocffz".to_owned());
-    spam.insert("did:plc:ss7fj6p6yfirwq2hnlkfuntt".to_owned());
-
-    let deser_evt: BskyEvent;
+    let mut deser_evt: BskyEvent;
     if compressed {
         unsafe {
             deser_evt = decompress_fast(&evt).unwrap();
@@ -71,17 +62,43 @@ pub async fn handle_event_fast(
             }
         };
     }
-    if spam.contains(&deser_evt.did) {
+
+    // Missing or unrecognised type
+    if deser_evt.commit.get_type() == ATEventType::Unknown {
         return Ok((0, rec));
     }
 
-    let mut commit: Commit = match deser_evt.commit {
-        Some(m) => m,
-        None => {
-            return Ok((0, rec));
+    let filters = g.get_filters();
+    // Run global filters first, then those for the given event type
+    match filters.get(&ATEventType::Global) {
+        Some(f) => {
+            for func in f {
+                if !func.check(&deser_evt) {
+                    info!("Global filter filtered!");
+                    return Ok((0, rec));
+                }
+            }
         }
+        None => {}
     };
 
+    let evt_type = deser_evt.commit.get_type();
+    match filters.get(&evt_type) {
+        Some(f) => {
+            for func in f {
+                if !func.check(&deser_evt) {
+                    return Ok((0, rec));
+                }
+            }
+        }
+        None => {}
+    };
+
+    // We know commit isnt None as get_type() already does the check
+    let mut commit;
+    unsafe {
+        commit = mem::take(&mut deser_evt.commit).unwrap_unchecked();
+    }
     let rkey = mem::take(&mut commit.rkey); //yoinky sploinky
     let now = Utc::now().timestamp_micros();
     let drift = (now - deser_evt.time_us) / 1000;
@@ -90,21 +107,14 @@ pub async fn handle_event_fast(
         let mut is_reply = false;
         let mut is_image = false;
         let mut created_at = 0;
-        match commit.collection.as_str() {
-            "app.bsky.feed.post" => {
+
+        match evt_type {
+            ATEventType::Post => {
                 match &commit.record {
                     Some(r) => {
                         is_image = r.images.is_some();
                         created_at = match chrono::DateTime::parse_from_rfc3339(&r.created_at) {
-                            Ok(t) => {
-                                if now - t.timestamp_micros()
-                                    > chrono::Duration::hours(24).num_microseconds().unwrap()
-                                {
-                                    // People like to backfill, so ignore these
-                                    return Ok((0, rec));
-                                }
-                                t.timestamp_micros()
-                            }
+                            Ok(t) => t.timestamp_micros(),
                             Err(_) => deser_evt.time_us, // if we cant find this field, just use the time the event was emitted
                         };
                         match &r.reply {
@@ -127,7 +137,7 @@ pub async fn handle_event_fast(
                 return Ok((drift, recv));
             }
 
-            "app.bsky.feed.repost" => {
+            ATEventType::Repost => {
                 let rkey_out = get_rkey(&commit);
 
                 if rkey_out.is_empty() {
@@ -138,7 +148,7 @@ pub async fn handle_event_fast(
                 return Ok((drift, recv));
             }
 
-            "app.bsky.feed.like" => {
+            ATEventType::Like => {
                 let rkey_out = get_rkey(&commit);
 
                 if rkey_out.is_empty() {
@@ -149,7 +159,7 @@ pub async fn handle_event_fast(
                 return Ok((drift, recv));
             }
 
-            "app.bsky.graph.follow" => {
+            ATEventType::Follow => {
                 let mut did_out = String::new();
                 match &commit.record {
                     Some(r) => {
@@ -170,7 +180,7 @@ pub async fn handle_event_fast(
                 return Ok((drift, recv));
             }
 
-            "app.bsky.graph.block" => {
+            ATEventType::Block => {
                 let mut blockee = String::new();
                 match &commit.record {
                     Some(r) => {
@@ -193,25 +203,25 @@ pub async fn handle_event_fast(
             _ => {}
         }
     } else if commit.operation == "delete" {
-        match commit.collection.as_str() {
-            "app.bsky.feed.post" => {
+        match commit.get_type() {
+            ATEventType::Post => {
                 let recv = g.rm_post(deser_evt.did, rkey, rec).await;
                 return Ok((drift, recv));
             }
-            "app.bsky.feed.repost" => {
+            ATEventType::Repost => {
                 let recv = g.rm_repost(deser_evt.did, rkey, rec).await;
                 return Ok((drift, recv));
             }
 
-            "app.bsky.feed.like" => {
+            ATEventType::Like => {
                 let recv = g.rm_like(deser_evt.did, rkey, rec).await;
                 return Ok((drift, recv));
             }
-            "app.bsky.graph.follow" => {
+            ATEventType::Follow => {
                 let recv = g.rm_follow(deser_evt.did, rkey, rec).await;
                 return Ok((drift, recv));
             }
-            "app.bsky.graph.block" => {
+            ATEventType::Block => {
                 let recv = g.rm_block(deser_evt.did, rkey, rec).await;
                 return Ok((drift, recv));
             }

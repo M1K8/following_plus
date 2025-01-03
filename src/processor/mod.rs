@@ -1,12 +1,14 @@
 use crate::at_event_processor::ATEventProcessor;
-use crate::bsky::types::BskyEvent;
+use crate::bsky::types::ATEventType;
 use crate::common::FetchMessage;
+use crate::filter::Filter;
+use crate::filter::FilterList;
 use crate::server;
 use backoff::future::retry;
 use backoff::ExponentialBackoffBuilder;
 use dashmap::DashMap;
-use database::GraphFetcher;
 use neo4rs::{ConfigBuilder, Graph, Query};
+use std::collections::VecDeque;
 use std::env;
 use std::mem;
 use std::sync::Arc;
@@ -17,10 +19,13 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::graph::*;
+const Q_LIMIT: usize = 55;
+
+const TX_Q_LEN: usize = 70;
 
 macro_rules! queue_event_write {
     ($self:ident, $query_name:expr, $recv:ident, $( $arg:ident ),+) => {{
-        let queue = match $query_name {
+        let queue_and_query = match $query_name {
             "reply" =>  (&mut $self.reply_queue,queries::ADD_REPLY),
             "post" =>   (&mut $self.post_queue,queries::ADD_POST),
             "repost" => (&mut $self.repost_queue,queries::ADD_REPOST),
@@ -34,13 +39,13 @@ macro_rules! queue_event_write {
         $(
             params.insert(stringify!($arg).to_string(), $arg);
         )*
-        queue.0.push(params);
+        queue_and_query.0.push(params);
         // Check if the queue is full
-        if queue.0.len() >= Q_LIMIT {
+        if queue_and_query.0.len() >= Q_LIMIT {
             // Move queue values without copying
-            let q = mem::take(queue.0);
-            let q_name = Some(queue.1);
-            let resp = $self.enqueue_query($query_name.to_string(), q_name, (&pluralize($query_name), q), $recv).await;
+            let q = mem::take(queue_and_query.0);
+            let queue = Some(queue_and_query.1);
+            let resp = $self.enqueue_query(queue, (&pluralize($query_name), q), $recv).await;
             return resp
         }
 
@@ -51,7 +56,7 @@ macro_rules! queue_event_write {
 
 macro_rules! queue_event_remove {
     ($query_name:expr,$recv:ident, $self:ident, $( $arg:ident ),+) => {{
-        let queue = match $query_name {
+        let queue_and_query = match $query_name {
             "reply" =>  (&mut $self.rm_reply_queue,queries::REMOVE_REPLY),
             "post" =>   (&mut $self.rm_post_queue,queries::REMOVE_POST),
             "repost" => (&mut $self.rm_repost_queue,queries::REMOVE_REPOST),
@@ -66,13 +71,13 @@ macro_rules! queue_event_remove {
             params.insert(stringify!($arg).to_string(), $arg);
         )*
 
-        queue.0.push(params);
+        queue_and_query.0.push(params);
         // Check if the queue is full
-        if queue.0.len() >= Q_LIMIT {
+        if queue_and_query.0.len() >= Q_LIMIT {
             // Move queue values without copying
-            let q = mem::take(queue.0);
-            let q_name = Some(queue.1);
-            let resp = $self.enqueue_query($query_name.to_string(), q_name, (&pluralize($query_name), q), $recv).await;
+            let q = mem::take(queue_and_query.0);
+            let queue = Some(queue_and_query.1);
+            let resp = $self.enqueue_query(queue, (&pluralize($query_name), q), $recv).await;
             return resp
         }
         $recv // we havent used the channel, so just pass it back up
@@ -97,7 +102,7 @@ pub struct MemgraphWrapper {
 
     tx_queue: Arc<DashMap<String, Query>>,
 
-    filters: Vec<fn(&BskyEvent) -> bool>,
+    filters: HashMap<ATEventType, VecDeque<Box<dyn Filter + Send>>>,
 }
 
 impl MemgraphWrapper {
@@ -108,6 +113,7 @@ impl MemgraphWrapper {
         pass: &str,
         recv: mpsc::Receiver<FetchMessage>,
         lock: Arc<RwLock<()>>,
+        filters: HashMap<ATEventType, FilterList>, //FilterList,
     ) -> Result<Self, neo4rs::Error> {
         let replica = env::var("REPLICA").unwrap_or("".into());
         let mut replica_conn = None;
@@ -201,6 +207,7 @@ impl MemgraphWrapper {
 
         let res = Self {
             inner,
+            filters,
             tx_queue: Arc::new(DashMap::new()),
             like_queue: Default::default(),
             post_queue: Default::default(),
@@ -215,18 +222,12 @@ impl MemgraphWrapper {
             rm_repost_queue: Default::default(),
             rm_block_queue: Default::default(),
             rm_reply_queue: Default::default(),
-
-            filters: vec![],
         };
 
         Ok(res)
     }
-}
-
-impl ATEventProcessor for MemgraphWrapper {
     async fn enqueue_query(
         &mut self,
-        name: String,
         query_script: Option<&str>,
         mut params: (&str, Vec<HashMap<String, String>>),
         prev_recv: Option<mpsc::Receiver<()>>,
@@ -241,6 +242,7 @@ impl ATEventProcessor for MemgraphWrapper {
             if prev_recv.is_some() {
                 prev_recv.unwrap().recv().await;
             }
+            let name = (params.0.to_owned()).clone();
 
             tokio::spawn(async move {
                 match retry(
@@ -316,7 +318,9 @@ impl ATEventProcessor for MemgraphWrapper {
         }
         prev_recv
     }
+}
 
+impl ATEventProcessor for MemgraphWrapper {
     async fn add_reply(
         &mut self,
         did: String,
@@ -459,7 +463,25 @@ impl ATEventProcessor for MemgraphWrapper {
         resp
     }
 
-    fn get_filters(&self) -> &Vec<fn(&BskyEvent) -> bool> {
+    fn get_filters(&self) -> &HashMap<ATEventType, VecDeque<Box<dyn Filter + Send>>> {
         &self.filters
+    }
+}
+
+fn pluralize(word: &str) -> String {
+    let word_len = word.len();
+    let snip = &word[..word_len - 1];
+    let last_char = word.chars().nth(word_len - 1).unwrap();
+
+    if last_char == 'y' || word.ends_with("ay") {
+        return format!("{}ies", snip);
+    } else if last_char == 's' || last_char == 'x' || last_char == 'z' {
+        return format!("{}es", word);
+    } else if last_char == 'o' && word.ends_with("o") && !word.ends_with("oo") {
+        return format!("{}oes", snip);
+    } else if last_char == 'u' && word.ends_with("u") {
+        return format!("{}i", snip);
+    } else {
+        return format!("{}s", word);
     }
 }

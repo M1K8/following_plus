@@ -1,6 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde_derive::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+
 pub fn verify_jwt(jwtstr: &str, service_did: &String) -> Option<String> {
     let parts = jwtstr.split(".").map(String::from).collect::<Vec<_>>();
 

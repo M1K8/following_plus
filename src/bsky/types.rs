@@ -105,6 +105,32 @@ pub struct Commit {
     pub cid: Option<String>,
 }
 
+pub trait CommitTypeable {
+    fn get_type(&self) -> ATEventType;
+}
+
+impl CommitTypeable for Commit {
+    fn get_type(&self) -> ATEventType {
+        match self.collection.as_str() {
+            "app.bsky.feed.post" => ATEventType::Post,
+            "app.bsky.feed.repost" => ATEventType::Repost,
+            "app.bsky.feed.like" => ATEventType::Like,
+            "app.bsky.graph.follow" => ATEventType::Follow,
+            "app.bsky.graph.block" => ATEventType::Block,
+            _ => ATEventType::Unknown,
+        }
+    }
+}
+
+impl CommitTypeable for Option<Commit> {
+    fn get_type(&self) -> ATEventType {
+        match self {
+            Some(c) => c.get_type(),
+            None => ATEventType::Unknown,
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Record {
@@ -245,4 +271,16 @@ impl core::error::Error for RecNotFound {
     fn cause(&self) -> Option<&dyn std::error::Error> {
         self.source()
     }
+}
+
+#[derive(Hash, Eq, PartialEq, Clone)]
+pub enum ATEventType {
+    Post,
+    Repost,
+    Follow,
+    Like,
+    Block,
+    Reply,
+    Global,
+    Unknown,
 }

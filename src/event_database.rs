@@ -1,6 +1,5 @@
-use std::{collections::HashMap, error::Error};
-
 use serde::de::DeserializeOwned;
+use std::{collections::HashMap, error::Error};
 
 #[trait_variant::make(Send)]
 pub trait EventDatabase<T: DeserializeOwned> {

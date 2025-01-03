@@ -1,8 +1,11 @@
 use at_event_processor::MaybeSemaphore;
+use bsky::types::ATEventType;
 use common::FetchMessage;
-use graph::memgraph::MemgraphWrapper;
+use filter::FilterList;
 use pprof::protos::Message;
+use processor::MemgraphWrapper;
 use simple_moving_average::{SumTreeSMA, SMA};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, mem, process};
@@ -15,8 +18,10 @@ mod at_event_processor;
 pub mod bsky;
 pub mod common;
 mod event_database;
+mod filter;
 mod forward_server;
 pub mod graph;
+mod processor;
 mod server;
 mod ws;
 
@@ -63,17 +68,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user = env::var("MM_USER").unwrap_or("user".into());
     let pw = env::var("MM_PW").unwrap_or("pass".into());
     //
-
+    let lock = Arc::new(RwLock::new(()));
+    let (send, recv) = mpsc::channel::<FetchMessage>(100);
     // If env says we need to forward DB requests, just do that & nothing else
     if !forward_mode.is_empty() {
         info!("Starting forward web server");
         forward_server::serve(forward_mode).await.unwrap();
         info!("Exiting forward web server");
         return Ok(());
+    } else {
+        // Otherwise, spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
+        thread::spawn(move || {
+            let web_runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(16)
+                .build()
+                .unwrap();
+
+            info!("Starting web listener thread");
+            let wait = web_runtime.spawn(async move {
+                server::serve(send).await.unwrap();
+            });
+            web_runtime.block_on(wait).unwrap();
+            info!("Exiting web listener thread");
+        });
+        //
     }
 
-    let lock = Arc::new(RwLock::new(()));
-    let (send, recv) = mpsc::channel::<FetchMessage>(100);
+    // Define the filters & scopes we want applied to events
+    let mut filters = HashMap::new();
+
+    let mut global_filters: FilterList = VecDeque::new();
+    global_filters.push_front(Box::new(filter::date_filter));
+
+    let mut post_filters: FilterList = VecDeque::new();
+    post_filters.push_front(Box::new(filter::spam_filter));
+
+    let mut repost_filters: FilterList = VecDeque::new();
+    repost_filters.push_front(Box::new(filter::spam_filter));
+
+    filters.insert(ATEventType::Post, post_filters);
+    filters.insert(ATEventType::Repost, repost_filters);
+    filters.insert(ATEventType::Global, global_filters);
+    //
+
     info!("Connecting to memgraph");
     let mut graph = MemgraphWrapper::new(
         "bolt://localhost:7687",
@@ -82,27 +120,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &pw,
         recv,
         lock.clone(),
+        filters,
     )
     .await
     .unwrap();
     info!("Connected to memgraph");
-
-    // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
-    thread::spawn(move || {
-        let web_runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(16)
-            .build()
-            .unwrap();
-
-        info!("Starting web listener thread");
-        let wait = web_runtime.spawn(async move {
-            server::serve(send).await.unwrap();
-        });
-        web_runtime.block_on(wait).unwrap();
-        info!("Exiting web listener thread");
-    });
-    //
 
     // Connect to the websocket
     info!("Connecting to Bluesky firehose");
@@ -153,6 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 m
             }
         } {
+            // TODO - Write test EventDatabase impl to check params are being processed properly, then chain w/ test ATEventProcessor
             Ok(msg) => {
                 match msg.opcode {
                     fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
