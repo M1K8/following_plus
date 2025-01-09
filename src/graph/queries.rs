@@ -19,11 +19,11 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
                 .build(),
             || async {
                 let qry = neo4rs::query(PURGE_OLD_POSTS);
-                let qry2: neo4rs::Query = neo4rs::query(PURGE_NO_FOLLOWERS);
-                let qry3: neo4rs::Query = neo4rs::query(PURGE_DISCONNECTED);
+                //let qry2: neo4rs::Query = neo4rs::query(PURGE_NO_FOLLOWERS);
+                //let qry3: neo4rs::Query = neo4rs::query(PURGE_DISCONNECTED);
 
                 let mut tx = conn.start_txn().await.unwrap();
-                match tx.run_queries(vec![qry, qry2, qry3]).await {
+                match tx.run_queries(vec![qry]).await {
                     Ok(_) => {
                         let res = match tx.commit().await {
                             Ok(_) => Ok(()),
@@ -161,17 +161,17 @@ MATCH (p:Post) WHERE toInteger(p.timestamp) < (timestamp() - 7200000000) // 2 ho
 DETACH DELETE p
 "#;
 
-pub(crate) const PURGE_DISCONNECTED: &str = r#"
-MATCH (p:User)-[f:FOLLOWS]->(:User) WHERE p.tracked IS NULL
-DETACH DELETE f
-"#;
+// pub(crate) const PURGE_DISCONNECTED: &str = r#"
+// MATCH (p:User)-[f:FOLLOWS]->(:User) WHERE p.tracked IS NULL
+// DETACH DELETE f
+// "#;
 
-pub(crate) const PURGE_NO_FOLLOWERS: &str = r#"
-OPTIONAL MATCH (:User)-[r:FOLLOWS]->(u:User)
-  WITH u, count(r) as followers 
-WHERE followers = 0
-DETACH DELETE u
-"#;
+// pub(crate) const PURGE_NO_FOLLOWERS: &str = r#"
+// OPTIONAL MATCH (:User)-[r:FOLLOWS]->(u:User)
+//   WITH u, count(r) as followers
+// WHERE followers = 0
+// DETACH DELETE u
+// "#;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Sorting by timestamp happens in RustLand, as it seems to be signigicantly faster than in memgraphLand (~2.3s for each query -> 300ms), given that we sort by ts again anyway once the results are combined

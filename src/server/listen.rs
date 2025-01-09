@@ -226,7 +226,7 @@ pub async fn listen_for_requests<T: EventDatabase<HashMap<String, PostMsg>> + Cl
                 warn!("Error getting follows for {}: {}", &msg.did, e);
                 in_flight.remove(&msg.did);
             }
-        };
+        }; // todo - split into 2 funcs
         _ = fetch_and_return_posts(fetcher.clone(), msg, &cursor).await;
     }
 }

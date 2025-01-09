@@ -88,7 +88,7 @@ impl EventDatabase<HashMap<String, PostMsg>> for GraphFetcher {
             None => {}
         };
 
-        // This is to be used when we dotn want explicit transactions
+        // This is to be used when we dont want to use explicit transactions
         match self.conn.execute(qry).await {
             Ok(_) => None,
             Err(e) => Some(Box::new(e)),

@@ -3,7 +3,6 @@ mod graph_test {
     use std::collections::{HashMap, VecDeque};
 
     use tokio::select;
-    use uuid::Uuid;
 
     use crate::{
         at_event_processor::{ATEventProcessor, MaybeSemaphore},
@@ -12,7 +11,7 @@ mod graph_test {
         graph::queries,
     };
 
-    // These just check the calls call enqueue_query porperly
+    // These just check the calls call enqueue_query properly
     #[tokio::test]
     async fn check_single_query() {
         let mut tg = TestGraph::new();
@@ -97,6 +96,7 @@ mod graph_test {
     struct TestGraph {
         filters: HashMap<ATEventType, VecDeque<Box<dyn Filter + Send>>>,
         queue: VecDeque<HashMap<String, (String, Vec<HashMap<String, String>>)>>,
+        query_counter: HashMap<String, usize>,
     }
 
     impl TestGraph {
@@ -108,32 +108,38 @@ mod graph_test {
             Self {
                 filters: HashMap::new(),
                 queue: VecDeque::new(),
+                query_counter: HashMap::new(),
             }
         }
 
         async fn enqueue_query(
             &mut self,
-            query_script: Option<&str>,
+            query_script: &str,
             params: (&str, Vec<HashMap<String, String>>),
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
-            assert!(query_script.is_some());
             let script = params.0.to_owned();
             let inner_params = (script, params.1);
             let mut inner = HashMap::new();
-            inner.insert(Uuid::new_v4().to_string(), inner_params);
+            let ctr = match self.query_counter.get(query_script) {
+                Some(c) => *c,
+                None => 0,
+            };
+            let key = format!("{query_script}_{ctr}");
+            inner.insert(key, inner_params);
             match sem {
                 Some(mut s) => {
                     select! {
                         _ = s.recv() => {},
-                        _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                            panic!("empty channel")
+                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                            panic!("non null channel, but nothing received")
                         }
                     }
                 }
                 None => {}
             };
 
+            self.query_counter.insert(query_script.to_owned(), ctr + 1);
             self.queue.push_back(inner);
             None
         }
@@ -152,7 +158,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::ADD_REPLY),
+                queries::ADD_REPLY,
                 (
                     "replies",
                     vec![HashMap::from([
@@ -176,7 +182,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::ADD_POST),
+                queries::ADD_POST,
                 (
                     "posts",
                     vec![HashMap::from([
@@ -200,7 +206,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::ADD_REPOST),
+                queries::ADD_REPOST,
                 (
                     "reposts",
                     vec![HashMap::from([
@@ -222,7 +228,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::ADD_FOLLOW),
+                queries::ADD_FOLLOW,
                 (
                     "follows",
                     vec![HashMap::from([
@@ -244,7 +250,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::ADD_LIKE),
+                queries::ADD_LIKE,
                 (
                     "likes",
                     vec![HashMap::from([
@@ -266,7 +272,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::ADD_BLOCK),
+                queries::ADD_BLOCK,
                 (
                     "blocks",
                     vec![HashMap::from([
@@ -287,7 +293,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::REMOVE_POST),
+                queries::REMOVE_POST,
                 (
                     "posts",
                     vec![HashMap::from([
@@ -307,7 +313,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::REMOVE_REPOST),
+                queries::REMOVE_REPOST,
                 (
                     "reposts",
                     vec![HashMap::from([
@@ -327,7 +333,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::REMOVE_FOLLOW),
+                queries::REMOVE_FOLLOW,
                 (
                     "follows",
                     vec![HashMap::from([
@@ -347,7 +353,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::REMOVE_LIKE),
+                queries::REMOVE_LIKE,
                 (
                     "likes",
                     vec![HashMap::from([
@@ -367,7 +373,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::REMOVE_BLOCK),
+                queries::REMOVE_BLOCK,
                 (
                     "blocks",
                     vec![HashMap::from([
@@ -387,7 +393,7 @@ mod graph_test {
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
-                Some(queries::REMOVE_REPLY),
+                queries::REMOVE_REPLY,
                 (
                     "replies",
                     vec![HashMap::from([
