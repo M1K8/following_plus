@@ -128,7 +128,9 @@ pub async fn handle_event_fast(
                         match &r.embed {
                             Some(v) => {
                                 match &v.video {
-                                    Some(value) => panic!("{:?} :: {:?}", str::from_utf8(evt), value),
+                                    Some(value) => {
+                                        panic!("{:?} :: {:?}", str::from_utf8(evt), value)
+                                    }
                                     None => {}
                                 };
                             }

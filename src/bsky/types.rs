@@ -170,14 +170,6 @@ pub struct Feature {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Image {
-    pub alt: Option<String>,
-    pub aspect_ratio: Option<Aspct>,
-    pub image: Option<MediaInternal>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Aspct {
     pub height: u64,
     pub width: u64,
@@ -222,8 +214,10 @@ pub struct Ref {
 pub struct Embed {
     #[serde(rename = "$type")]
     pub type_field: Option<String>,
-    pub images: Option<Vec<Image>>,
-    pub video: Option<Video>,
+    pub alt: Option<String>,
+    pub aspect_ratio: Option<Aspct>,
+    pub images: Option<Vec<MediaInternal>>,
+    pub video: Option<MediaInternal>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
