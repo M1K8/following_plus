@@ -144,7 +144,7 @@ pub struct Record {
     pub text: Option<String>,
     pub reply: Option<Reply>,
     pub embed: Option<Embed>,
-    pub images: Option<Vec<Image>>,
+    pub images: Option<Vec<Media>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -176,6 +176,25 @@ pub struct Image {
     pub aspect_ratio: Option<HashMap<i64, i64>>,
     pub image: Option<Img>,
 }
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Video {
+    pub alt: Option<String>,
+    pub caption: Option<Vec<Caption>>,
+    pub aspect_ratio: Option<HashMap<i64, i64>>,
+    pub video: Option<Vec<u8>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Caption {
+    pub lang: Option<String>,
+    pub file: Option<Vec<u8>>,
+
+}
+
+
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -254,6 +273,16 @@ pub enum Embd {
     T1(String),
     T2(Subject),
 }
+
+
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Media {
+    Img(Image),
+    Vid(Video),
+}
+
 
 #[derive(Debug)]
 pub struct RecNotFound {}
