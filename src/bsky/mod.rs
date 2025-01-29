@@ -6,7 +6,7 @@ use chrono::Utc;
 use hyper::StatusCode;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
-use std::mem;
+use std::{mem, str};
 use tracing::{error, info, warn};
 use zstd::bulk::Decompressor;
 
@@ -129,7 +129,7 @@ pub async fn handle_event_fast(
                         match &r.embed {
                             Some(v) => {
                                 match &v.video {
-                                    Some(_) => panic!("{:?}", evt),
+                                    Some(_) => panic!("{:?}", str::from_utf8(evt)),
                                     None => {}
                                 };
                             }
