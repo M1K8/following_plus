@@ -5,7 +5,7 @@ use crate::{
 use chrono::Utc;
 use hyper::StatusCode;
 use once_cell::sync::Lazy;
-use serde::de::DeserializeOwned;
+use serde::de::{value, DeserializeOwned};
 use std::{mem, str};
 use tracing::{error, info, warn};
 use zstd::bulk::Decompressor;
@@ -53,7 +53,6 @@ pub async fn handle_event_fast(
             deser_evt = decompress_fast(&evt).unwrap();
         }
     } else {
-        println!("{:?}", evt);
         match serde_json::from_slice(&evt) {
             Ok(m) => {
                 deser_evt = m;
@@ -129,7 +128,7 @@ pub async fn handle_event_fast(
                         match &r.embed {
                             Some(v) => {
                                 match &v.video {
-                                    Some(_) => panic!("{:?}", str::from_utf8(evt)),
+                                    Some(value) => panic!("{:?}", v),
                                     None => {}
                                 };
                             }
