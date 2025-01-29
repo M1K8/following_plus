@@ -172,8 +172,15 @@ pub struct Feature {
 #[serde(rename_all = "camelCase")]
 pub struct Image {
     pub alt: Option<String>,
-    pub aspect_ratio: Option<HashMap<i64, i64>>,
+    pub aspect_ratio: Option<Aspct>,
     pub image: Option<Img>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Aspct {
+    pub height: u64,
+    pub width: u64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
