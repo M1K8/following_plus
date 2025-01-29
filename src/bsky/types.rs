@@ -173,7 +173,7 @@ pub struct Feature {
 pub struct Image {
     pub alt: Option<String>,
     pub aspect_ratio: Option<Aspct>,
-    pub image: Option<Img>,
+    pub image: Option<MediaInternal>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -189,7 +189,7 @@ pub struct Video {
     pub alt: Option<String>,
     pub caption: Option<Vec<Caption>>,
     pub aspect_ratio: Option<HashMap<i64, i64>>,
-    pub video: Option<Vec<u8>>,
+    pub video: Option<MediaInternal>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -201,7 +201,7 @@ pub struct Caption {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ImageInternal {
+pub struct MediaInternal {
     #[serde(rename = "$type")]
     pub type_field: Option<String>,
     #[serde(rename = "ref")]
@@ -266,7 +266,7 @@ pub enum Subj {
 #[serde(untagged)]
 pub enum Img {
     T1(String),
-    T2(ImageInternal),
+    T2(MediaInternal),
 }
 
 #[derive(Debug)]
