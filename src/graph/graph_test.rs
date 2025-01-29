@@ -178,7 +178,7 @@ mod graph_test {
             rkey: String,
             timestamp: &i64,
             is_reply: bool,
-            is_image: bool,
+            post_type: String,
             sem: MaybeSemaphore,
         ) -> MaybeSemaphore {
             self.enqueue_query(
@@ -188,7 +188,7 @@ mod graph_test {
                     vec![HashMap::from([
                         ("timestamp".to_owned(), format!("{timestamp}")),
                         ("is_reply".to_owned(), format!("{is_reply}")),
-                        ("is_image".to_owned(), format!("{is_image}")),
+                        ("type".to_owned(), format!("{post_type}")),
                         ("rkey".to_owned(), rkey),
                         ("did".to_owned(), did),
                     ])],

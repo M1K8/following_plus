@@ -338,7 +338,7 @@ impl ATEventProcessor for MemgraphWrapper {
         rkey: String,
         timestamp: &i64,
         is_reply: bool,
-        is_image: bool,
+        post_type: String,
         rec: Option<mpsc::Receiver<()>>,
     ) -> Option<mpsc::Receiver<()>> {
         let is_reply = if is_reply {
@@ -347,15 +347,9 @@ impl ATEventProcessor for MemgraphWrapper {
             "n".to_owned()
         };
 
-        let is_image = if is_image {
-            "y".to_owned()
-        } else {
-            "n".to_owned()
-        };
-
         let timestamp = format! {"{timestamp}"};
 
-        let resp = queue_event_write!(self, "post", rec, did, rkey, is_reply, is_image, timestamp);
+        let resp = queue_event_write!(self, "post", rec, did, rkey, is_reply, post_type, timestamp);
         resp
     }
 

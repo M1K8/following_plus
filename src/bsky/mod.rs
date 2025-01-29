@@ -53,6 +53,7 @@ pub async fn handle_event_fast(
             deser_evt = decompress_fast(&evt).unwrap();
         }
     } else {
+        println!("{:?}", evt);
         match serde_json::from_slice(&evt) {
             Ok(m) => {
                 deser_evt = m;
@@ -104,14 +105,12 @@ pub async fn handle_event_fast(
 
     if commit.operation == "create" {
         let mut is_reply = false;
-        let mut is_image = false;
         let mut created_at = 0;
 
         match evt_type {
             ATEventType::Post => {
                 match &commit.record {
                     Some(r) => {
-                        is_image = r.images.is_some();
                         created_at = match chrono::DateTime::parse_from_rfc3339(&r.created_at) {
                             Ok(t) => t.timestamp_micros(),
                             Err(_) => deser_evt.time_us, // if we cant find this field, just use the time the event was emitted
@@ -130,7 +129,14 @@ pub async fn handle_event_fast(
                     _ => {}
                 }
                 let recv = g
-                    .add_post(deser_evt.did, rkey, &created_at, is_reply, is_image, rec)
+                    .add_post(
+                        deser_evt.did,
+                        rkey,
+                        &created_at,
+                        is_reply,
+                        "".to_string(),
+                        rec,
+                    )
                     .await;
 
                 return Ok((drift, recv));

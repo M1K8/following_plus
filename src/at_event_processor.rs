@@ -23,7 +23,7 @@ pub trait ATEventProcessor {
         rkey: String,
         timestamp: &i64,
         is_reply: bool,
-        is_image: bool,
+        post_type: String,
         rec: MaybeSemaphore,
     ) -> MaybeSemaphore;
 

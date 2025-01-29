@@ -152,9 +152,14 @@ async fn describe() -> Result<Json<types::Describe>, ()> {
     let hostname = env::var("FEEDGEN_HOSTNAME").unwrap();
     let dezscribe = types::Describe {
         did: format!("did:web:{hostname}"),
-        feeds: vec![types::Feed {
-            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/following_plus"),
-        }],
+        feeds: vec![
+            types::Feed {
+                uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/following_plus"),
+            },
+            types::Feed {
+                uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/videos_plus"),
+            },
+        ],
     };
 
     Ok(Json(dezscribe))
