@@ -5,7 +5,7 @@ use crate::{
 use chrono::Utc;
 use hyper::StatusCode;
 use once_cell::sync::Lazy;
-use serde::de::{value, DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::{mem, str};
 use tracing::{error, info, warn};
 use zstd::bulk::Decompressor;

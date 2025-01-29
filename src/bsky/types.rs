@@ -198,8 +198,8 @@ pub struct MediaInternal {
     pub type_field: Option<String>,
     #[serde(rename = "ref")]
     pub reff: Option<Ref>,
-    pub mime_type: String,
-    pub size: u64,
+    pub mime_type: Option<String>,
+    pub size: Option<u64>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
