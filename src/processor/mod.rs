@@ -348,7 +348,7 @@ impl ATEventProcessor for MemgraphWrapper {
         };
 
         let timestamp = format! {"{timestamp}"};
-
+        info!("{} {} {} {} {}", did, rkey, is_reply, post_type, timestamp);
         let resp = queue_event_write!(self, "post", rec, did, rkey, is_reply, post_type, timestamp);
         resp
     }
