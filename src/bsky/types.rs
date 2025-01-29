@@ -143,8 +143,7 @@ pub struct Record {
     pub facets: Option<Vec<Facet>>,
     pub text: Option<String>,
     pub reply: Option<Reply>,
-    pub embed: Option<Embed>,
-    pub images: Option<Vec<Media>>,
+    pub embed: Option<Vec<Media>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -191,10 +190,7 @@ pub struct Video {
 pub struct Caption {
     pub lang: Option<String>,
     pub file: Option<Vec<u8>>,
-
 }
-
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -212,16 +208,6 @@ pub struct ImageInternal {
 pub struct Ref {
     #[serde(rename = "$link")]
     pub link: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Embed {
-    #[serde(rename = "$type")]
-    pub type_field: Option<String>,
-    pub uri: Option<String>,
-    pub embedded: Option<Embd>,
-    pub external: Option<External>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -269,20 +255,10 @@ pub enum Img {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum Embd {
-    T1(String),
-    T2(Subject),
-}
-
-
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
 pub enum Media {
     Img(Image),
     Vid(Video),
 }
-
 
 #[derive(Debug)]
 pub struct RecNotFound {}

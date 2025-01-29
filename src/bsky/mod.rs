@@ -129,8 +129,8 @@ pub async fn handle_event_fast(
                         match &r.images {
                             Some(v) => {
                                 panic!("{:?}", v);
-                            },
-                            None => {},
+                            }
+                            None => {}
                         };
                     }
                     _ => {}
