@@ -126,7 +126,7 @@ pub async fn handle_event_fast(
                             _ => {}
                         }
 
-                        match &r.images {
+                        match &r.embed {
                             Some(v) => {
                                 panic!("{:?}", v);
                             }
