@@ -125,9 +125,17 @@ pub async fn handle_event_fast(
                             }
                             _ => {}
                         }
+
+                        match &r.images {
+                            Some(v) => {
+                                panic!("{:?}", v);
+                            },
+                            None => {},
+                        };
                     }
                     _ => {}
                 }
+
                 let recv = g
                     .add_post(
                         deser_evt.did,
