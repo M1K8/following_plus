@@ -256,7 +256,7 @@ pub enum Img {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Media {
-    Img(Image),
+    Img(Vec<Image>),
     Vid(Video),
 }
 
