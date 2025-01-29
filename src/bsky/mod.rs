@@ -58,7 +58,7 @@ pub async fn handle_event_fast(
                 deser_evt = m;
             }
             Err(err) => {
-                panic!("unable to marhsal event: {:?}", err)
+                panic!("unable to marshal event: {:?}", err)
             }
         };
     }
@@ -105,6 +105,7 @@ pub async fn handle_event_fast(
     if commit.operation == "create" {
         let mut is_reply = false;
         let mut created_at = 0;
+        let post_type: String;
 
         match evt_type {
             ATEventType::Post => {
@@ -128,27 +129,27 @@ pub async fn handle_event_fast(
                         match &r.embed {
                             Some(v) => {
                                 match &v.video {
-                                    Some(value) => {
-                                        panic!("{:?} :: {:?}", str::from_utf8(evt), value)
+                                    Some(_) => {
+                                        post_type = "v".to_owned();
                                     }
-                                    None => {}
+                                    None => {
+                                        match &v.images {
+                                            Some(_) => {
+                                                post_type = "i".to_owned();
+                                            }
+                                            None => post_type = "t".to_owned(),
+                                        };
+                                    }
                                 };
                             }
-                            None => {}
+                            None => post_type = "t".to_owned(),
                         };
                     }
-                    _ => {}
+                    _ => post_type = "t".to_owned(),
                 }
 
                 let recv = g
-                    .add_post(
-                        deser_evt.did,
-                        rkey,
-                        &created_at,
-                        is_reply,
-                        "".to_string(),
-                        rec,
-                    )
+                    .add_post(deser_evt.did, rkey, &created_at, is_reply, post_type, rec)
                     .await;
 
                 return Ok((drift, recv));
