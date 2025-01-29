@@ -143,7 +143,7 @@ pub struct Record {
     pub facets: Option<Vec<Facet>>,
     pub text: Option<String>,
     pub reply: Option<Reply>,
-    pub embed: Option<Vec<Media>>,
+    pub embed: Option<Embed>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -212,6 +212,15 @@ pub struct Ref {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Embed {
+    #[serde(rename = "$type")]
+    pub type_field: Option<String>,
+    pub images: Option<Vec<Image>>,
+    pub video: Option<Video>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct External {
     pub title: Option<String>,
     pub uri: Option<String>,
@@ -251,13 +260,6 @@ pub enum Subj {
 pub enum Img {
     T1(String),
     T2(ImageInternal),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Media {
-    Img(Vec<Image>),
-    Vid(Video),
 }
 
 #[derive(Debug)]
