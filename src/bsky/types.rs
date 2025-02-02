@@ -79,7 +79,7 @@ pub struct FollowVal {
     pub type_field: Option<String>,
     pub subject: String,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    pub created_at: StringOrInt,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -254,6 +254,13 @@ pub struct Subject {
 pub enum Subj {
     T1(String),
     T2(Subject),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum StringOrInt {
+    T1(String),
+    T2(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
