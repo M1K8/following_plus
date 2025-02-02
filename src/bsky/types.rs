@@ -22,7 +22,7 @@ impl Recordable<Follow> for FollowsResp {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Follow {
     pub uri: String,
@@ -39,7 +39,7 @@ impl Subjectable for Follow {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
     pub uri: String,
@@ -72,7 +72,7 @@ impl Recordable<Block> for BlocksResp {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FollowVal {
     #[serde(rename = "$type")]
