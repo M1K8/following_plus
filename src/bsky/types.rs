@@ -131,12 +131,12 @@ impl CommitTypeable for Option<Commit> {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Record {
     #[serde(rename = "$type")]
     pub type_field: Option<String>,
-    pub created_at: String,
+    pub created_at: StringOrInt,
     pub subject: Option<Subj>,
     pub lang: Option<String>,
     pub langs: Option<Vec<String>>,

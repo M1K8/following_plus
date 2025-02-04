@@ -33,7 +33,11 @@ pub fn date_filter(m: &BskyEvent) -> bool {
         Some(c) => {
             match &c.record {
                 Some(r) => {
-                    match chrono::DateTime::parse_from_rfc3339(&r.created_at) {
+                    let created_at = match &r.created_at {
+                        crate::bsky::types::StringOrInt::T1(s) => s,
+                        crate::bsky::types::StringOrInt::T2(i) => &format!("{i}"),
+                    };
+                    match chrono::DateTime::parse_from_rfc3339(&created_at) {
                         Ok(t) => {
                             return Utc::now().timestamp_micros() - t.timestamp_micros()
                                 < chrono::Duration::hours(24).num_microseconds().unwrap();

@@ -111,7 +111,11 @@ pub async fn handle_event_fast(
             ATEventType::Post => {
                 match &commit.record {
                     Some(r) => {
-                        created_at = match chrono::DateTime::parse_from_rfc3339(&r.created_at) {
+                        let parsed_created_at = match &r.created_at {
+                            crate::bsky::types::StringOrInt::T1(s) => s,
+                            crate::bsky::types::StringOrInt::T2(i) => &format!("{i}"),
+                        };
+                        created_at = match chrono::DateTime::parse_from_rfc3339(parsed_created_at) {
                             Ok(t) => t.timestamp_micros(),
                             Err(_) => deser_evt.time_us, // if we cant find this field, just use the time the event was emitted
                         };
