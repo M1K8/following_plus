@@ -206,7 +206,7 @@ pub struct MediaInternal {
 #[serde(rename_all = "camelCase")]
 pub struct Ref {
     #[serde(rename = "$link")]
-    pub link: String,
+    pub link: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
