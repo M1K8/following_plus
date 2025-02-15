@@ -50,7 +50,12 @@ pub async fn handle_event_fast(
     let mut deser_evt: BskyEvent;
     if compressed {
         unsafe {
-            deser_evt = decompress_fast(&evt).unwrap();
+            deser_evt = match decompress_fast(&evt) {
+                Some(s) => s,
+                None => {
+                    return Ok((0, rec));
+                }
+            };
         }
     } else {
         match serde_json::from_slice(&evt) {
@@ -58,7 +63,8 @@ pub async fn handle_event_fast(
                 deser_evt = m;
             }
             Err(err) => {
-                panic!("unable to marshal event: {:?}", err)
+                error!("unable to marshal event: {:?}", err);
+                return Ok((0, rec));
             }
         };
     }
@@ -163,7 +169,8 @@ pub async fn handle_event_fast(
                 let rkey_out = get_rkey(&commit);
 
                 if rkey_out.is_empty() {
-                    panic!("empty rkey");
+                    error!("empty rkey: repost");
+                    return Ok((0, rec));
                 }
 
                 let recv = g.add_repost(deser_evt.did, rkey_out, rkey, rec).await;
@@ -174,7 +181,8 @@ pub async fn handle_event_fast(
                 let rkey_out = get_rkey(&commit);
 
                 if rkey_out.is_empty() {
-                    panic!("empty rkey");
+                    error!("empty rkey: like");
+                    return Ok((0, rec));
                 }
 
                 let recv = g.add_like(deser_evt.did, rkey_out, rkey, rec).await;
@@ -196,7 +204,8 @@ pub async fn handle_event_fast(
                     None => {}
                 }
                 if did_out.is_empty() {
-                    panic!("empty did_out");
+                    error!("empty did_out: follow");
+                    return Ok((0, rec));
                 }
                 let recv = g.add_follow(deser_evt.did, did_out, rkey, rec).await;
                 return Ok((drift, recv));
@@ -217,7 +226,8 @@ pub async fn handle_event_fast(
                     None => {}
                 }
                 if blockee.is_empty() {
-                    panic!("empty blockee");
+                    error!("empty blockee: blocc");
+                    return Ok((0, rec));
                 }
                 let recv = g.add_block(blockee, deser_evt.did, rkey, rec).await;
                 return Ok((drift, recv));
