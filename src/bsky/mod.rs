@@ -306,28 +306,46 @@ async fn get<V: Subjectable, T: DeserializeOwned + Recordable<V>>(
     uri: &str,
     did: String,
     client: reqwest::Client,
-) -> Result<Vec<(String, String)>, (reqwest::Error, Option<StatusCode>)> {
+) -> Result<Vec<(String, String)>, (Box<dyn std::error::Error>, Option<StatusCode>)> {
     let mut res: Vec<(String, String)> = Vec::new();
     let mut req = match client.get(uri).build() {
         Ok(r) => r,
         Err(e) => {
-            return Err((e, None));
+            return Err((Box::new(e), None));
         }
     };
     let mut resp: T = match client.execute(req).await {
         Ok(resp) => {
             let status = resp.status();
-            match resp.json().await {
+            let body = match resp.bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    warn!(
+                        "unable to marshal body, where the request returned returned {}: {:?}",
+                        status, e
+                    );
+                    return Err((Box::new(e), Some(status)));
+                }
+            };
+
+            let res: T = match serde_json::from_slice(&body) {
                 Ok(r) => r,
                 Err(e) => {
-                    warn!("resp returned {}: {:?}", status, e);
-                    return Err((e, Some(status)));
+                    warn!(
+                        "resp returned {} :: {:?} : {:?}",
+                        status,
+                        str::from_utf8(&body).unwrap(),
+                        e
+                    );
+                    return Err((Box::new(e), Some(status)));
                 }
-            }
+            };
+
+            res
         }
         Err(e) => {
             let status = e.status();
-            return Err((e, status));
+            return Err((Box::new(e), status));
         }
     };
 
@@ -342,7 +360,7 @@ async fn get<V: Subjectable, T: DeserializeOwned + Recordable<V>>(
                 let url = uri.to_owned() + format!("&cursor={}", c).as_str();
                 req = match client.get(&url).build() {
                     Ok(r) => r,
-                    Err(ee) => return Err((ee, None)),
+                    Err(ee) => return Err((Box::new(ee), None)),
                 };
                 let r = match client.execute(req).await {
                     Ok(r) => r,
@@ -384,7 +402,7 @@ async fn get<V: Subjectable, T: DeserializeOwned + Recordable<V>>(
 pub async fn get_follows(
     did: String,
     client: reqwest::Client,
-) -> Result<Vec<(String, String)>, (reqwest::Error, Option<StatusCode>)> {
+) -> Result<Vec<(String, String)>, (Box<dyn std::error::Error>, Option<StatusCode>)> {
     info!("Getting follows for {:?}", did);
     let base_url = format!(
         "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.follow&limit=100"
@@ -395,7 +413,7 @@ pub async fn get_follows(
 pub async fn get_blocks(
     did: String,
     client: reqwest::Client,
-) -> Result<Vec<(String, String)>, (reqwest::Error, Option<StatusCode>)> {
+) -> Result<Vec<(String, String)>, (Box<dyn std::error::Error>, Option<StatusCode>)> {
     info!("Getting blocks for {:?}", did);
     let base_url = format!(
         "https://bsky.social/xrpc/com.atproto.repo.listRecords?repo={did}&collection=app.bsky.graph.block&limit=100"

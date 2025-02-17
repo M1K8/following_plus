@@ -19,11 +19,10 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
                 .build(),
             || async {
                 let qry = neo4rs::query(PURGE_OLD_POSTS);
-                //let qry2: neo4rs::Query = neo4rs::query(PURGE_NO_FOLLOWERS);
-                //let qry3: neo4rs::Query = neo4rs::query(PURGE_DISCONNECTED);
+                let qry3: neo4rs::Query = neo4rs::query(PURGE_DISCONNECTED);
 
                 let mut tx = conn.start_txn().await.unwrap();
-                match tx.run_queries(vec![qry]).await {
+                match tx.run_queries(vec![qry, qry3]).await {
                     Ok(_) => {
                         let res = match tx.commit().await {
                             Ok(_) => Ok(()),
@@ -56,29 +55,36 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
 pub(crate) const ADD_FOLLOW: &str = r#"
 UNWIND $follows as follow
 MERGE (u:User {did: follow.did})
+    SET u.last_seen = timestamp()
 MERGE (v:User {did: follow.out})
+    SET v.last_seen = timestamp()
 CREATE (u)-[r:FOLLOWS {rkey: follow.rkey }]->(v)
 "#;
 
 pub(crate) const POPULATE_FOLLOW: &str = r#"
 UNWIND $follows as follow
 MERGE (u:User {did: follow.did})
-    SET u.tracked = true
+    SET u.last_seen = timestamp()
 MERGE (v:User {did: follow.out})
+    SET v.last_seen = timestamp()
 MERGE (u)-[r:FOLLOWS { rkey: follow.rkey }]->(v)
 "#;
 
 pub(crate) const ADD_BLOCK: &str = r#"
 UNWIND $blocks as block
 MERGE (u:User {did: block.did})
+    SET u.last_seen = timestamp()
 MERGE (v:User {did: block.blockee})
+    SET v.last_seen = timestamp()
 CREATE (u)-[r:BLOCKED {rkey: block.rkey }]->(v)
 "#;
 
 pub(crate) const POPULATE_BLOCK: &str = r#"
 UNWIND $blocks as block
 MERGE (u:User {did: block.did})
+    SET u.last_seen = timestamp()
 MERGE (v:User {did: block.blockee})
+    SET v.last_seen = timestamp()
 MERGE (u)-[r:BLOCKED {rkey: block.rkey }]->(v)
 "#;
 
@@ -87,6 +93,7 @@ UNWIND $likes as like
 MATCH (p:Post) WHERE p.rkey = like.rkey_parent
 SET p.likes = p.likes + 1
 MERGE (u:User {did: like.did})
+    SET u.last_seen = timestamp()
 
 CREATE (u)-[r:LIKES {rkey: like.rkey }]->(p)
 "#;
@@ -94,6 +101,7 @@ CREATE (u)-[r:LIKES {rkey: like.rkey }]->(p)
 pub(crate) const ADD_POST: &str = r#"
 UNWIND $posts as post
 MERGE (u:User {did: post.did})
+    SET u.last_seen = timestamp()
 CREATE (u)-[:POSTED]->(p: Post { timestamp: post.timestamp, rkey: post.rkey, isReply: post.is_reply, type: post.post_type, likes: 0, reposts: 0} )
 "#;
 
@@ -102,6 +110,7 @@ UNWIND $reposts as repost
 MATCH (p:Post) WHERE p.rkey = repost.rkey_parent
 SET p.reposts = p.reposts + 1
 MERGE (u:User {did: repost.did})
+    SET u.last_seen = timestamp()
 CREATE (u)-[r:REPOSTED {rkey: repost.rkey}]->(p)
 "#;
 
@@ -109,6 +118,7 @@ pub(crate) const ADD_REPLY: &str = r#"
 UNWIND $replies as reply
 MATCH (p:Post) WHERE p.rkey = reply.parent
 MERGE (u:User {did: reply.did})
+    SET u.last_seen = timestamp()
 CREATE (u)-[r:REPLIED_TO {rkey: reply.rkey }]->(p)
 "#;
 
@@ -116,14 +126,16 @@ CREATE (u)-[r:REPLIED_TO {rkey: reply.rkey }]->(p)
 
 pub(crate) const REMOVE_LIKE: &str = r#"
 UNWIND $likes as like
-MATCH (:User {did: like.did})-[r:LIKES {rkey: like.rkey }]->(p:Post)
+MATCH (u:User {did: like.did})-[r:LIKES {rkey: like.rkey }]->(p:Post)
+SET u.last_seen = timestamp()
 SET p.likes = p.likes - 1
 DELETE r
 "#;
 
 pub(crate) const REMOVE_FOLLOW: &str = r#"
 UNWIND $follows as follow
-MATCH (:User {did: follow.did})-[r:FOLLOWS {rkey: follow.rkey}]->(:User)
+MATCH (u:User {did: follow.did})-[r:FOLLOWS {rkey: follow.rkey}]->(:User)
+SET u.last_seen = timestamp()
 DELETE r
 "#;
 
@@ -135,21 +147,24 @@ DELETE r
 
 pub(crate) const REMOVE_POST: &str = r#"
 UNWIND $posts as post
-MATCH (:User {did: post.did})-[r:POSTED ]->(p:Post {rkey: post.rkey})
+MATCH (u:User {did: post.did})-[:POSTED]->(p:Post {rkey: post.rkey})
+SET u.last_seen = timestamp()
 DETACH DELETE p
 "#;
 
 pub(crate) const REMOVE_REPLY: &str = r#"
 UNWIND $replies as reply
-MATCH (:User {did: reply.did})-[r:REPLIED_TO {rkey: reply.rkey }]->(p:Post) 
-with p, r
-where p.is_reply == "y"
+MATCH (u:User {did: reply.did})-[r:REPLIED_TO {rkey: reply.rkey }]->(p:Post)
+SET u.last_seen = timestamp()
+WITH p, r
+WHERE p.is_reply == "y"
 DELETE r
 "#;
 
 pub(crate) const REMOVE_REPOST: &str = r#"
 UNWIND $reposts as repost
-MATCH (:User {did: repost.did})-[r:REPOSTED {rkey: repost.rkey }]->(p:Post)
+MATCH (u:User {did: repost.did})-[r:REPOSTED {rkey: repost.rkey }]->(p:Post)
+SET u.last_seen = timestamp()
 SET p.likes = p.reposts - 1
 DELETE r
 "#;
@@ -161,17 +176,11 @@ MATCH (p:Post) WHERE toInteger(p.timestamp) < (timestamp() - 7200000000) // 2 ho
 DETACH DELETE p
 "#;
 
-// pub(crate) const PURGE_DISCONNECTED: &str = r#"
-// MATCH (p:User)-[f:FOLLOWS]->(:User) WHERE p.tracked IS NULL
-// DETACH DELETE f
-// "#;
-
-// pub(crate) const PURGE_NO_FOLLOWERS: &str = r#"
-// OPTIONAL MATCH (:User)-[r:FOLLOWS]->(u:User)
-//   WITH u, count(r) as followers
-// WHERE followers = 0
-// DETACH DELETE u
-// "#;
+pub(crate) const PURGE_DISCONNECTED: &str = r#"
+ MATCH (p:User)
+    WHERE p.last_seen < (timestamp() - 14400000000) // 4 hours
+ DETACH DELETE p
+ "#;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Sorting by timestamp happens in RustLand, as it seems to be signigicantly faster than in memgraphLand (~2.3s for each query -> 300ms), given that we sort by ts again anyway once the results are combined

@@ -40,6 +40,7 @@ simple_moving_average = "1.0.2"
 backoff = "0.4.0"
 trait-variant = "0.1.2"
 futures = "0.3.31"
+serde_bytes = "0.11.15"
 [dependencies.uuid]
 version = "1.11.0"
 features = [

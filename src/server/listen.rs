@@ -404,7 +404,7 @@ async fn get_follows(
             {
                 return Err(Box::new(RecNotFound {}));
             }
-            return Err(Box::new(e.0));
+            return Err(e.0);
         }
     };
 
@@ -428,7 +428,7 @@ async fn get_blocks(
             {
                 return Err(Box::new(RecNotFound {}));
             }
-            return Err(Box::new(e.0));
+            return Err(e.0);
         }
     };
 
