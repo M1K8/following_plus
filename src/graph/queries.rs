@@ -187,11 +187,12 @@ pub(crate) const PURGE_DISCONNECTED: &str = r#"
 ///
 pub(crate) const GET_FOLLOWING_PLUS_LIKES: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
-WITH u,p,og
 
 // Get all posts 2nd degree follows
 
 WITH og, u, p AS post
+SET og.last_seen = timestamp()
+
 OPTIONAL MATCH (og)-[b:BLOCKS]->(u)
 with u,b, post, CASE WHEN b IS NULL 
   THEN post ELSE NULL END as p
@@ -257,8 +258,8 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 600
 
 pub(crate) const GET_BEST_FOLLOWED: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
+WITH og, p, u, toInteger(p.timestamp) AS ts
 SET og.last_seen = timestamp()
-WITH p, u, toInteger(p.timestamp) AS ts
 WHERE (p.likes > 10 OR p.reposts > 5) AND (ts - {}) <= 120000000 // last 2 mins
 
 RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 600
