@@ -226,8 +226,8 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 600
 pub(crate) const GET_BEST_2ND_DEG_REPOSTS: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(u:User)-[:REPOSTED]->(p:Post)
 WITH p,og
- SET og.last_seen = timestamp()
 WHERE p.likes >= 50
+ SET og.last_seen = timestamp()
 MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
 
@@ -242,8 +242,8 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 600
 pub(crate) const GET_BEST_2ND_DEG_LIKES: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(:User)-[:LIKES]->(p:Post)
 WITH p,og
-SET og.last_seen = timestamp()
 WHERE p.likes >= 100
+SET og.last_seen = timestamp()
 
 MATCH (p)<-[a:POSTED]-(u:User)
 WITH DISTINCT p, a, u, og
@@ -259,8 +259,8 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 600
 pub(crate) const GET_BEST_FOLLOWED: &str = r#"
 MATCH (og:User {did: $did})-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
 WITH og, p, u, toInteger(p.timestamp) AS ts
-SET og.last_seen = timestamp()
 WHERE (p.likes > 10 OR p.reposts > 5) AND (ts - {}) <= 120000000 // last 2 mins
+SET og.last_seen = timestamp()
 
 RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 600
 "#;
