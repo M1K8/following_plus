@@ -70,6 +70,13 @@ pub async fn listen_for_requests<T: EventDatabase<HashMap<String, PostMsg>> + Cl
             cursor = now();
         }
 
+        match writer.write(queries::POKE, None).await {
+            Some(e) => {
+                error!("While poking: {}", e);
+            }
+            None => {}
+        };
+
         // Blocks
         let did_blocks = msg.did.clone();
         if !seen_map.contains(&did_blocks) {
