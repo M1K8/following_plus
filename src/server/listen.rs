@@ -69,8 +69,10 @@ pub async fn listen_for_requests<T: EventDatabase<HashMap<String, PostMsg>> + Cl
         } else {
             cursor = now();
         }
+        let mut hm = HashMap::new();
+        hm.insert("did".to_owned(), msg.did.clone());
 
-        match writer.write(queries::POKE, None).await {
+        match writer.write(queries::POKE, Some(hm)).await {
             Some(e) => {
                 error!("While poking: {}", e);
             }
