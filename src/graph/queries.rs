@@ -61,6 +61,17 @@ MERGE (v:User {did: follow.out})
 CREATE (u)-[r:FOLLOWS {rkey: follow.rkey }]->(v)
 "#;
 
+pub(crate) const ADD_FOLLOW_FEED: &str = r#"
+UNWIND $follows as follow
+MERGE (u:User {did: follow.did})
+    SET u.last_seen = timestamp()
+    SET u.feed_user = true
+    MERGE (v:User {did: follow.out})
+    SET v.last_seen = timestamp()
+    SET v.feed_user = true
+CREATE (u)-[r:FOLLOWS {rkey: follow.rkey }]->(v)
+"#;
+
 pub(crate) const POPULATE_FOLLOW: &str = r#"
 UNWIND $follows as follow
 MERGE (u:User {did: follow.did})
