@@ -178,7 +178,7 @@ DETACH DELETE p
 
 pub(crate) const PURGE_DISCONNECTED: &str = r#"
  MATCH (p:User)
-    WHERE p.last_seen < (timestamp() - 14400000000) // 4 hours
+    WHERE p.last_seen < (timestamp() - 14400000000) // 4 hours AND !p.feed_user
  DETACH DELETE p
  "#;
 
@@ -263,4 +263,5 @@ RETURN u.did AS user, p.rkey AS url, ts ORDER BY ts DESC LIMIT 600
 pub(crate) const POKE: &str = r#"
 MATCH (og:User {did: $did})
 SET og.last_seen = timestamp()
+SET og.feed_user = true
 "#;
