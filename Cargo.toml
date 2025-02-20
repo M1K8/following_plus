@@ -1,7 +1,7 @@
 [package]
 name = "m1kbsky"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 neo4rs = "0.8.0"

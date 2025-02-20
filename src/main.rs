@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pw = env::var("MM_PW").unwrap_or("pass".into());
     //
     let lock = Arc::new(RwLock::new(()));
-    let (send, recv) = mpsc::channel::<FetchMessage>(100);
+    let (send_channel, recieve_channel) = mpsc::channel::<FetchMessage>(100);
     // If env says we need to forward DB requests, just do that & nothing else
     if !forward_mode.is_empty() {
         info!("Starting forward web server");
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             info!("Starting web listener thread");
             let wait = web_runtime.spawn(async move {
-                server::serve(send).await.unwrap();
+                server::serve(send_channel).await.unwrap();
             });
             web_runtime.block_on(wait).unwrap();
             info!("Exiting web listener thread");
@@ -118,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "bolt://localhost:7688",
         &user,
         &pw,
-        recv,
+        recieve_channel,
         lock.clone(),
         filters,
     )

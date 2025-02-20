@@ -14,7 +14,7 @@ fn get_post_uri(did: String, rkey: String) -> String {
 }
 
 macro_rules! process_next {
-    ($next_expr:expr, $posts_expr:expr, $reason:expr) => {
+    ($next_expr:expr_2021, $posts_expr:expr_2021, $reason:expr_2021) => {
         match $next_expr {
             Ok(v) => match v {
                 Some(v) => {

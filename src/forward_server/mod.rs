@@ -63,6 +63,8 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+
+// TODO - handle video feed
 async fn forward(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
@@ -120,6 +122,8 @@ async fn base(
     Ok("Hello!".into())
 }
 
+
+// TODO - handle video feed
 async fn well_known() -> Result<Json<types::WellKnown>, ()> {
     match env::var("FEEDGEN_SERVICE_DID") {
         Ok(service_did) => {
@@ -148,6 +152,7 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
     }
 }
 
+// TODO - handle video feed
 async fn describe() -> Result<Json<types::Describe>, ()> {
     let hostname = env::var("FEEDGEN_HOSTNAME").unwrap();
     let dezscribe = types::Describe {

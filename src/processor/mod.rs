@@ -24,7 +24,7 @@ const Q_LIMIT: usize = 55;
 const TX_Q_LEN: usize = 70;
 
 macro_rules! queue_event_write {
-    ($self:ident, $query_name:expr, $recv:ident, $( $arg:ident ),+) => {{
+    ($self:ident, $query_name:expr_2021, $recv:ident, $( $arg:ident ),+) => {{
         let queue_and_query = match $query_name {
             "reply" =>  (&mut $self.reply_queue,queries::ADD_REPLY),
             "post" =>   (&mut $self.post_queue,queries::ADD_POST),
@@ -55,7 +55,7 @@ macro_rules! queue_event_write {
 }
 
 macro_rules! queue_event_remove {
-    ($query_name:expr,$recv:ident, $self:ident, $( $arg:ident ),+) => {{
+    ($query_name:expr_2021,$recv:ident, $self:ident, $( $arg:ident ),+) => {{
         let queue_and_query = match $query_name {
             "reply" =>  (&mut $self.rm_reply_queue,queries::REMOVE_REPLY),
             "post" =>   (&mut $self.rm_post_queue,queries::REMOVE_POST),
@@ -111,7 +111,7 @@ impl MemgraphWrapper {
         replica_uri: &str,
         user: &str,
         pass: &str,
-        recv: mpsc::Receiver<FetchMessage>,
+        recieve_channel: mpsc::Receiver<FetchMessage>,
         lock: Arc<RwLock<()>>,
         filters: HashMap<ATEventType, FilterList>, //FilterList,
     ) -> Result<Self, neo4rs::Error> {
@@ -199,7 +199,7 @@ impl MemgraphWrapper {
         let write_conn = GraphFetcher::new(write_conn);
         let replica = GraphFetcher::new(replica);
         tokio::spawn(async move {
-            match server::listen::listen_for_requests(lock, write_conn, replica, recv).await {
+            match server::listen::listen_for_requests(lock, write_conn, replica, recieve_channel).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };
