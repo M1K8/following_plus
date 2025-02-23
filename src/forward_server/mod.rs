@@ -126,11 +126,13 @@ async fn base(
 async fn well_known() -> Result<Json<types::WellKnown>, ()> {
     match env::var("FEEDGEN_SERVICE_DID") {
         Ok(service_did) => {
+            info!(service_did);
             let hostname = env::var("FEEDGEN_HOSTNAME").unwrap_or("".into());
             if !service_did.ends_with(hostname.as_str()) {
                 error!("service_did does not end with hostname");
                 return Err(());
             } else {
+                info!(hostname);
                 let known_service = types::KnownService {
                     id: "#bsky_fg".to_owned(),
                     r#type: "BskyFeedGenerator".to_owned(),
