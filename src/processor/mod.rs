@@ -4,8 +4,8 @@ use crate::common::FetchMessage;
 use crate::filter::Filter;
 use crate::filter::FilterList;
 use crate::server;
-use backoff::future::retry;
 use backoff::ExponentialBackoffBuilder;
+use backoff::future::retry;
 use dashmap::DashMap;
 use neo4rs::{ConfigBuilder, Graph, Query};
 use std::collections::VecDeque;
@@ -14,7 +14,7 @@ use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, time::Instant};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -199,7 +199,9 @@ impl MemgraphWrapper {
         let write_conn = GraphFetcher::new(write_conn);
         let replica = GraphFetcher::new(replica);
         tokio::spawn(async move {
-            match server::listen::listen_for_requests(lock, write_conn, replica, recieve_channel).await {
+            match server::listen::listen_for_requests(lock, write_conn, replica, recieve_channel)
+                .await
+            {
                 Ok(_) => {}
                 Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };

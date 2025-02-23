@@ -63,10 +63,10 @@ pub trait ATEventProcessor {
     async fn rm_post(&mut self, did: String, rkey: String, rec: MaybeSemaphore) -> MaybeSemaphore;
 
     async fn rm_repost(&mut self, did: String, rkey: String, rec: MaybeSemaphore)
-        -> MaybeSemaphore;
+    -> MaybeSemaphore;
 
     async fn rm_follow(&mut self, did: String, rkey: String, rec: MaybeSemaphore)
-        -> MaybeSemaphore;
+    -> MaybeSemaphore;
 
     async fn rm_like(&mut self, did: String, rkey: String, rec: MaybeSemaphore) -> MaybeSemaphore;
 

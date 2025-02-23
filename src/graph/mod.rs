@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use backoff::{future::retry, ExponentialBackoffBuilder};
+use backoff::{ExponentialBackoffBuilder, future::retry};
 use neo4rs::Graph;
 use tracing::{error, info, warn};
 

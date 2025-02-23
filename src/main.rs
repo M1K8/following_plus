@@ -4,13 +4,13 @@ use common::FetchMessage;
 use filter::FilterList;
 use pprof::protos::Message;
 use processor::MemgraphWrapper;
-use simple_moving_average::{SumTreeSMA, SMA};
+use simple_moving_average::{SMA, SumTreeSMA};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, mem, process};
 use std::{fs::File, io::Write, thread};
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
@@ -129,8 +129,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Connect to the websocket
     info!("Connecting to Bluesky firehose");
     let compressed = !compression.is_empty();
-    let url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
-    let url2 = format!("wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
+    let url = format!(
+        "wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}",
+        compressed
+    );
+    let url2 = format!(
+        "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}",
+        compressed
+    );
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     info!("Connected to Bluesky firehose");
     let ma = SumTreeSMA::<_, i64, 20000>::new();
@@ -190,7 +196,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     Ok((drift, recv_chan)) => {
                                         if drift > 10000 || drift < 0 {
                                             info!("Weird Drift: {}ms", drift);
-                                            info!("Reconnecting to Bluesky firehose, falling back to jetstream2");
+                                            info!(
+                                                "Reconnecting to Bluesky firehose, falling back to jetstream2"
+                                            );
                                             let nu_url = url2.clone()
                                                 + format!(
                                                     "&cursor={}",

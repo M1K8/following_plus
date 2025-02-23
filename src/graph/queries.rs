@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use backoff::{future::retry, Error, ExponentialBackoffBuilder};
+use backoff::{Error, ExponentialBackoffBuilder, future::retry};
 use neo4rs::Graph;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
@@ -60,7 +60,6 @@ MERGE (v:User {did: follow.out})
     SET v.last_seen = timestamp()
 CREATE (u)-[r:FOLLOWS {rkey: follow.rkey }]->(v)
 "#;
-
 
 pub(crate) const POPULATE_FOLLOW: &str = r#"
 UNWIND $follows as follow

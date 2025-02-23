@@ -16,30 +16,32 @@ const DICT: &'static [u8; 112640] = include_bytes!("./dictionary");
 static mut DECOMP: Lazy<Decompressor<'static>> =
     Lazy::new(|| zstd::bulk::Decompressor::with_dictionary(DICT).unwrap());
 
-unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> { unsafe {
-    // Dont _have_ to do this, but https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html
-    let dec_ptr = &raw mut DECOMP;
-    let dec_ptr = match dec_ptr.as_mut() {
-        Some(p) => p,
-        None => panic!("Decompressor is undefined?"),
-    };
-    let msg = dec_ptr.decompress(m, 819200);
-    match msg {
-        Ok(m) => {
-            match serde_json::from_slice(m.as_slice()) {
-                Ok(m) => return Some(m),
-                Err(err) => {
-                    error!(
-                        "Error decompressing payload {:?}: {err}",
-                        String::from_utf8(m)
-                    );
-                    return None;
-                }
-            };
-        }
-        Err(err) => panic!("Error getting payload: {err}"),
-    };
-}}
+unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
+    unsafe {
+        // Dont _have_ to do this, but https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html
+        let dec_ptr = &raw mut DECOMP;
+        let dec_ptr = match dec_ptr.as_mut() {
+            Some(p) => p,
+            None => panic!("Decompressor is undefined?"),
+        };
+        let msg = dec_ptr.decompress(m, 819200);
+        match msg {
+            Ok(m) => {
+                match serde_json::from_slice(m.as_slice()) {
+                    Ok(m) => return Some(m),
+                    Err(err) => {
+                        error!(
+                            "Error decompressing payload {:?}: {err}",
+                            String::from_utf8(m)
+                        );
+                        return None;
+                    }
+                };
+            }
+            Err(err) => panic!("Error getting payload: {err}"),
+        };
+    }
+}
 
 pub async fn handle_event_fast(
     evt: &[u8],
