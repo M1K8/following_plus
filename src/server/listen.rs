@@ -207,7 +207,7 @@ pub async fn listen_for_requests<T: EventDatabase<HashMap<String, PostMsg>> + Cl
                                                  "Error getting 2nd degree follows for {did}: {:?}",
                                                  e
                                              );
-                                             seen_map.remove(&did); // this aint ever gonna work, so ignore it
+                                             seen_map.remove(&did);
                                          }
 
                                          continue;
