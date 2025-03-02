@@ -68,7 +68,7 @@ MERGE (u:User {did: follow.did})
     SET u.feed_user = true
 MERGE (v:User {did: follow.out})
     SET v.last_seen = timestamp()
-    SET u.feed_user = true
+    SET v.feed_user = true
 MERGE (u)-[r:FOLLOWS { rkey: follow.rkey }]->(v)
 "#;
 
