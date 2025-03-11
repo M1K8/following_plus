@@ -139,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     info!("Connected to Bluesky firehose");
-    let ma = SumTreeSMA::<_, i64, 20000>::new();
+    let ma = SumTreeSMA::<_, i64, 25000>::new();
     let ctr = Arc::new(Mutex::new(ma));
     let ctr2 = ctr.clone();
 
@@ -148,8 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
             let avg = ctr2.lock().await.get_average();
             if avg > 50000 {
-                error!("Something wrong!");
-                panic!()
+                panic!("Something wrong - drift too high!")
             }
             info!("Average drift over 60s: {}ms", avg);
         }
