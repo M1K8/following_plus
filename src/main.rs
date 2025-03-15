@@ -239,7 +239,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     fastwebsockets::OpCode::Close => {
                         info!("Closing connection, trying to reopen...");
-                        ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
+                        loop {
+                            match ws::connect("jetstream1.us-east.bsky.network", url.clone()).await
+                            {
+                                Ok(w) => {
+                                    ws = w;
+                                    break;
+                                }
+                                Err(e) => {
+                                    error!("error reconnecting, trying again: {e}")
+                                }
+                            };
+                        }
                         continue;
                     }
                     _ => {
@@ -249,7 +260,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(e) => {
                 error!("WS Failed with error {e}, trying again");
-                ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
+                loop {
+                    match ws::connect("jetstream1.us-east.bsky.network", url.clone()).await {
+                        Ok(w) => {
+                            ws = w;
+                            break;
+                        }
+                        Err(e) => {
+                            error!("error reconnecting, trying again: {e}")
+                        }
+                    };
+                }
             }
         }
     }
