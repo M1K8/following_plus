@@ -1,20 +1,27 @@
+use at_event_processor::MaybeSemaphore;
+use bsky::types::ATEventType;
 use common::FetchMessage;
-use graph::GraphModel;
+use filter::FilterList;
 use pprof::protos::Message;
-use simple_moving_average::{SumTreeSMA, SMA};
-use std::sync::atomic::{AtomicU64, Ordering};
+use processor::MemgraphWrapper;
+use simple_moving_average::{SMA, SumTreeSMA};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, mem, process};
 use std::{fs::File, io::Write, thread};
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
+mod at_event_processor;
 pub mod bsky;
 pub mod common;
+mod event_database;
+mod filter;
 mod forward_server;
 pub mod graph;
+mod processor;
 mod server;
 mod ws;
 
@@ -50,7 +57,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(_) => {}
             };
-            //TODO Exit properly
             process::exit(0x0100);
         })
         .expect("Error setting Ctrl-C handler");
@@ -62,55 +68,78 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user = env::var("MM_USER").unwrap_or("user".into());
     let pw = env::var("MM_PW").unwrap_or("pass".into());
     //
-
+    let lock = Arc::new(RwLock::new(()));
+    let (send_channel, recieve_channel) = mpsc::channel::<FetchMessage>(100);
     // If env says we need to forward DB requests, just do that & nothing else
     if !forward_mode.is_empty() {
         info!("Starting forward web server");
         forward_server::serve(forward_mode).await.unwrap();
         info!("Exiting forward web server");
         return Ok(());
+    } else {
+        // Otherwise, spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
+        thread::spawn(move || {
+            let web_runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(16)
+                .build()
+                .unwrap();
+
+            info!("Starting web listener thread");
+            let wait = web_runtime.spawn(async move {
+                server::serve(send_channel).await.unwrap();
+            });
+            web_runtime.block_on(wait).unwrap();
+            info!("Exiting web listener thread");
+        });
+        //
     }
 
-    let lock = Arc::new(RwLock::new(()));
-    let (send, recv) = mpsc::channel::<FetchMessage>(100);
+    // Define the filters & scopes we want applied to events
+    let mut filters = HashMap::new();
+
+    let mut global_filters: FilterList = VecDeque::new();
+    global_filters.push_front(Box::new(filter::date_filter));
+
+    let mut post_filters: FilterList = VecDeque::new();
+    post_filters.push_front(Box::new(filter::spam_filter));
+
+    let mut repost_filters: FilterList = VecDeque::new();
+    repost_filters.push_front(Box::new(filter::spam_filter));
+
+    filters.insert(ATEventType::Post, post_filters);
+    filters.insert(ATEventType::Repost, repost_filters);
+    filters.insert(ATEventType::Global, global_filters);
+    //
+
     info!("Connecting to memgraph");
-    let mut graph = GraphModel::new(
+    let mut graph = MemgraphWrapper::new(
         "bolt://localhost:7687",
         "bolt://localhost:7688",
         &user,
         &pw,
-        recv,
+        recieve_channel,
         lock.clone(),
+        filters,
     )
     .await
     .unwrap();
     info!("Connected to memgraph");
 
-    // Spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
-    thread::spawn(move || {
-        let web_runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(16)
-            .build()
-            .unwrap();
-
-        info!("Starting web listener thread");
-        let wait = web_runtime.spawn(async move {
-            server::serve(send).await.unwrap();
-        });
-        web_runtime.block_on(wait).unwrap();
-        info!("Exiting web listener thread");
-    });
-    //
-
     // Connect to the websocket
     info!("Connecting to Bluesky firehose");
     let compressed = !compression.is_empty();
-    let url = format!("wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
-    let url2 = format!("wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}", compressed);
+    let url = format!(
+        "wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}",
+        compressed
+    );
+    let url2 = format!(
+        "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.graph.*&wantedCollections=app.bsky.feed.*&compress={}",
+        compressed
+    );
     let mut ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
     info!("Connected to Bluesky firehose");
-    let ma = SumTreeSMA::<_, i64, 20000>::new();
+    let ma = SumTreeSMA::<_, i64, 25000>::new();
     let ctr = Arc::new(Mutex::new(ma));
     let ctr2 = ctr.clone();
 
@@ -119,14 +148,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
             let avg = ctr2.lock().await.get_average();
             if avg > 50000 {
-                error!("Something wrong!");
-                panic!()
+                panic!("Something wrong - drift too high!")
             }
             info!("Average drift over 60s: {}ms", avg);
         }
     });
     let mut last_time = SystemTime::now();
-    let mut recv: Option<mpsc::Receiver<()>> = None; // Has to be an option otherwise mem::take wont work (bc it implements default())
+    let mut recv: MaybeSemaphore = None; // Has to be an option otherwise mem::take wont work (bc it implements default())
 
     loop {
         match tokio::select! {
@@ -152,6 +180,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 m
             }
         } {
+            // TODO - Write test EventDatabase impl to check params are being processed properly, then chain w/ test ATEventProcessor
             Ok(msg) => {
                 match msg.opcode {
                     fastwebsockets::OpCode::Binary | fastwebsockets::OpCode::Text => {
@@ -166,7 +195,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     Ok((drift, recv_chan)) => {
                                         if drift > 10000 || drift < 0 {
                                             info!("Weird Drift: {}ms", drift);
-                                            info!("Reconnecting to Bluesky firehose, falling back to jetstream2");
+                                            info!(
+                                                "Reconnecting to Bluesky firehose, falling back to jetstream2"
+                                            );
                                             let nu_url = url2.clone()
                                                 + format!(
                                                     "&cursor={}",
@@ -208,7 +239,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     fastwebsockets::OpCode::Close => {
                         info!("Closing connection, trying to reopen...");
-                        ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
+                        loop {
+                            match ws::connect("jetstream1.us-east.bsky.network", url.clone()).await
+                            {
+                                Ok(w) => {
+                                    ws = w;
+                                    break;
+                                }
+                                Err(e) => {
+                                    error!("error reconnecting, trying again: {e}")
+                                }
+                            };
+                        }
                         continue;
                     }
                     _ => {
@@ -218,7 +260,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(e) => {
                 error!("WS Failed with error {e}, trying again");
-                ws = ws::connect("jetstream1.us-east.bsky.network", url.clone()).await?;
+                loop {
+                    match ws::connect("jetstream1.us-east.bsky.network", url.clone()).await {
+                        Ok(w) => {
+                            ws = w;
+                            break;
+                        }
+                        Err(e) => {
+                            error!("error reconnecting, trying again: {e}")
+                        }
+                    };
+                }
             }
         }
     }

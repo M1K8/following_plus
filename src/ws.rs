@@ -2,21 +2,21 @@
 
 use std::{future::Future, sync::Arc};
 
-use fastwebsockets::{handshake, WebSocket};
+use fastwebsockets::{WebSocket, handshake};
 use hyper::{
+    Request,
     header::{CONNECTION, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION, UPGRADE},
     rt::Executor,
     upgrade::Upgraded,
-    Request,
 };
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 use tokio_rustls::{
-    rustls::{
-        pki_types::{pem::PemObject, CertificateDer, ServerName},
-        ClientConfig, RootCertStore,
-    },
     TlsConnector,
+    rustls::{
+        ClientConfig, RootCertStore,
+        pki_types::{CertificateDer, ServerName, pem::PemObject},
+    },
 };
 
 const DEFAULT_CERT: &str = "/etc/ssl/certs/ISRG_Root_X1.pem";

@@ -1,4 +1,5 @@
 use crate::server::types;
+use serde_derive::Deserialize;
 use tokio::sync::mpsc;
 
 #[derive(Debug)]
@@ -8,7 +9,7 @@ pub struct FetchMessage {
     pub resp: mpsc::Sender<PostResp>,
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Deserialize, Default)]
 pub struct PostMsg {
     pub uri: String,
     pub reason: String,

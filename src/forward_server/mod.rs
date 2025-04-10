@@ -1,14 +1,14 @@
 use axum::{
+    Json, Router,
     body::Body,
     extract::{Query, State},
     http::Method,
     response::Response,
     routing::get,
-    Json, Router,
 };
 use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
     TypedHeader,
+    headers::{Authorization, authorization::Bearer},
 };
 
 use axum_server::tls_rustls::RustlsConfig;
@@ -52,6 +52,7 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
         .route("/xrpc/app.bsky.feed.getFeedSkeleton", get(forward))
         .route("/xrpc/app.bsky.feed.describeFeedGenerator", get(describe))
         .route("/.well-known/did.json", get(well_known))
+        .fallback(base)
         .layer(ServiceBuilder::new().layer(cors))
         .with_state(state);
 
@@ -63,6 +64,7 @@ pub async fn serve(edpt: String) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// TODO - handle video feed
 async fn forward(
     Query(params): Query<HashMap<String, String>>,
     bearer: Option<TypedHeader<Authorization<Bearer>>>,
@@ -71,9 +73,8 @@ async fn forward(
     let iss;
     match &bearer {
         Some(s) => {
-            iss =
-                crate::server::auth::verify_jwt(s.0 .0.token(), &"did:web:feed.m1k.sh".to_owned())
-                    .unwrap();
+            iss = crate::server::auth::verify_jwt(s.0.0.token(), &"did:web:feed.m1k.sh".to_owned())
+                .unwrap();
         }
         None => {
             return Response::builder()
@@ -84,7 +85,7 @@ async fn forward(
     };
     info!("Forwarding for user id {}", iss);
     let tok = bearer.unwrap();
-    let tok = tok.0 .0.token();
+    let tok = tok.0.0.token();
 
     let resp = match state
         .client
@@ -117,9 +118,11 @@ async fn base(
     Query(_): Query<HashMap<String, String>>,
     _: Option<TypedHeader<Authorization<Bearer>>>,
 ) -> Result<String, ()> {
+    info!("Hey!");
     Ok("Hello!".into())
 }
 
+// TODO - handle video feed
 async fn well_known() -> Result<Json<types::WellKnown>, ()> {
     match env::var("FEEDGEN_SERVICE_DID") {
         Ok(service_did) => {
@@ -148,13 +151,19 @@ async fn well_known() -> Result<Json<types::WellKnown>, ()> {
     }
 }
 
+// TODO - handle video feed
 async fn describe() -> Result<Json<types::Describe>, ()> {
     let hostname = env::var("FEEDGEN_HOSTNAME").unwrap();
     let dezscribe = types::Describe {
         did: format!("did:web:{hostname}"),
-        feeds: vec![types::Feed {
-            uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/following_plus"),
-        }],
+        feeds: vec![
+            types::Feed {
+                uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/following_plus"),
+            },
+            types::Feed {
+                uri: format!("at://did:web:{hostname}/app.bsky.feed.generator/videos_plus"),
+            },
+        ],
     };
 
     Ok(Json(dezscribe))

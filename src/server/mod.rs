@@ -1,13 +1,13 @@
 use crate::common::FetchMessage;
 use axum::{
+    Json, Router,
     extract::{Query, State},
     http::Method,
     routing::get,
-    Json, Router,
 };
 use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
     TypedHeader,
+    headers::{Authorization, authorization::Bearer},
 };
 
 use hyper::{HeaderMap, StatusCode};
@@ -59,7 +59,7 @@ async fn index(
 ) -> Result<Json<types::Response>, axum::http::StatusCode> {
     let did = match bearer {
         Some(s) => {
-            let s = decode(s.0 .0.token()).unwrap().into_owned();
+            let s = decode(s.0.0.token()).unwrap().into_owned();
             auth::verify_jwt(&s, &"did:web:feed.m1k.sh".to_owned()).unwrap()
         }
         None => {
