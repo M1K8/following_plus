@@ -19,10 +19,10 @@ pub async fn kickoff_purge(lock: Arc<RwLock<()>>, conn: Graph) -> Result<(), neo
                 .build(),
             || async {
                 let qry = neo4rs::query(PURGE_OLD_POSTS);
-                let qry3: neo4rs::Query = neo4rs::query(PURGE_DISCONNECTED);
+                //let qry3: neo4rs::Query = neo4rs::query(PURGE_DISCONNECTED);
 
                 let mut tx = conn.start_txn().await.unwrap();
-                match tx.run_queries(vec![qry, qry3]).await {
+                match tx.run_queries(vec![qry]).await {
                     Ok(_) => {
                         let res = match tx.commit().await {
                             Ok(_) => Ok(()),
@@ -174,7 +174,7 @@ DELETE r
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) const PURGE_OLD_POSTS: &str = r#"
-MATCH (p:Post) WHERE toInteger(p.timestamp) < (timestamp() - 7200000000) // 2 hours
+MATCH (p:Post) WHERE toInteger(p.timestamp) < (timestamp() - 28800000000) // 8 hours
 DETACH DELETE p
 "#;
 
