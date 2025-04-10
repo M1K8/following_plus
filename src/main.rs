@@ -19,7 +19,6 @@ pub mod bsky;
 pub mod common;
 mod event_database;
 mod filter;
-mod forward_server;
 pub mod graph;
 mod processor;
 mod server;
@@ -64,36 +63,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // todo - this properly
     let compression = env::var("COMPRESS_ENABLE").unwrap_or("".into());
-    let forward_mode = env::var("FORWARD_MODE").unwrap_or("".into());
     let user = env::var("MM_USER").unwrap_or("user".into());
     let pw = env::var("MM_PW").unwrap_or("pass".into());
     //
     let lock = Arc::new(RwLock::new(()));
     let (send_channel, recieve_channel) = mpsc::channel::<FetchMessage>(100);
-    // If env says we need to forward DB requests, just do that & nothing else
-    if !forward_mode.is_empty() {
-        info!("Starting forward web server");
-        forward_server::serve(forward_mode).await.unwrap();
-        info!("Exiting forward web server");
-        return Ok(());
-    } else {
-        // Otherwise, spin this off to accept incoming requests (feed serving atm, will likely just be DB reads)
-        thread::spawn(move || {
-            let web_runtime = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(16)
-                .build()
-                .unwrap();
 
-            info!("Starting web listener thread");
-            let wait = web_runtime.spawn(async move {
-                server::serve(send_channel).await.unwrap();
-            });
-            web_runtime.block_on(wait).unwrap();
-            info!("Exiting web listener thread");
+    thread::spawn(move || {
+        let web_runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(16)
+            .build()
+            .unwrap();
+
+        info!("Starting web listener thread");
+        let wait = web_runtime.spawn(async move {
+            server::serve(send_channel).await.unwrap();
         });
-        //
-    }
+        web_runtime.block_on(wait).unwrap();
+        info!("Exiting web listener thread");
+    });
+    //
 
     // Define the filters & scopes we want applied to events
     let mut filters = HashMap::new();

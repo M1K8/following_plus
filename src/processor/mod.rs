@@ -18,6 +18,8 @@ use tokio::sync::{RwLock, mpsc};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+pub mod listen;
+
 use crate::graph::*;
 const Q_LIMIT: usize = 55;
 
@@ -199,9 +201,7 @@ impl MemgraphWrapper {
         let write_conn = GraphFetcher::new(write_conn);
         let replica = GraphFetcher::new(replica);
         tokio::spawn(async move {
-            match server::listen::listen_for_requests(lock, write_conn, replica, recieve_channel)
-                .await
-            {
+            match listen::listen_for_requests(lock, write_conn, replica, recieve_channel).await {
                 Ok(_) => {}
                 Err(e) => panic!("Error listening for requests, aborting: {}", e),
             };
