@@ -24,7 +24,7 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
             Some(p) => p,
             None => panic!("Decompressor is undefined?"),
         };
-        let msg = dec_ptr.decompress(m, 819200);
+        let msg = dec_ptr.decompress(m, 1024000);
         match msg {
             Ok(m) => {
                 match serde_json::from_slice(m.as_slice()) {
@@ -38,7 +38,10 @@ unsafe fn decompress_fast(m: &[u8]) -> Option<BskyEvent> {
                     }
                 };
             }
-            Err(err) => panic!("Error getting payload: {err}"),
+            Err(err) => {
+                error!("Error getting payload: {err}");
+                return None;
+            }
         };
     }
 }

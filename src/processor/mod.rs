@@ -3,7 +3,6 @@ use crate::bsky::types::ATEventType;
 use crate::common::FetchMessage;
 use crate::filter::Filter;
 use crate::filter::FilterList;
-use crate::server;
 use backoff::ExponentialBackoffBuilder;
 use backoff::future::retry;
 use dashmap::DashMap;
