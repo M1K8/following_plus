@@ -104,7 +104,7 @@ pub(crate) const ADD_POST: &str = r#"
 UNWIND $posts as post
 MERGE (u:User {did: post.did})
     SET u.last_seen = timestamp()
-CREATE (u)-[:POSTED]->(p: Post { timestamp: post.timestamp, rkey: post.rkey, isReply: post.is_reply, type: post.post_type, likes: 0, reposts: 0} )
+CREATE (u)-[:POSTED]->(p: Post { poster: post.did, timestamp: post.timestamp, rkey: post.rkey, isReply: post.is_reply, type: post.post_type, likes: 0, reposts: 0} )
 "#;
 
 pub(crate) const ADD_REPOST: &str = r#"

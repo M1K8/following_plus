@@ -145,22 +145,22 @@ pub async fn handle_event_fast(
                             Some(v) => {
                                 match &v.video {
                                     Some(_) => {
-                                        post_type = "v".to_owned();
+                                        post_type = "video".to_owned();
                                     }
                                     None => {
                                         match &v.images {
                                             Some(_) => {
-                                                post_type = "i".to_owned();
+                                                post_type = "image".to_owned();
                                             }
-                                            None => post_type = "t".to_owned(),
+                                            None => post_type = "text".to_owned(),
                                         };
                                     }
                                 };
                             }
-                            None => post_type = "t".to_owned(),
+                            None => post_type = "text".to_owned(),
                         };
                     }
-                    _ => post_type = "t".to_owned(),
+                    _ => post_type = "text".to_owned(),
                 }
 
                 let recv = g
